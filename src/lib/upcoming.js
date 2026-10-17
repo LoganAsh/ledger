@@ -12,11 +12,33 @@ export const FREQUENCIES = [
   { id: "monthly", label: "Monthly" },
   { id: "weekly", label: "Weekly" },
   { id: "biweekly", label: "Every 2 weeks" },
+  { id: "monthly_nth", label: "Certain weekdays each month" },
   { id: "quarterly", label: "Every 3 months" },
   { id: "yearly", label: "Yearly" },
   { id: "once", label: "One time" },
 ];
 export const frequencyLabel = (id) => FREQUENCIES.find((f) => f.id === id)?.label ?? id;
+export const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export const NTH_OPTIONS = [{ n: 1, label: "1st" }, { n: 2, label: "2nd" }, { n: 3, label: "3rd" }, { n: 4, label: "4th" }, { n: -1, label: "Last" }];
+
+// Date of the nth weekday in a month (n = -1 for the last one); null if it doesn't exist
+function nthWeekday(y, m, weekday, n) {
+  const dim = daysIn(y, m);
+  if (n === -1) {
+    const lastDow = new Date(y, m, dim).getDay();
+    return toIso(new Date(y, m, dim - ((lastDow - weekday + 7) % 7)));
+  }
+  const day = 1 + ((weekday - new Date(y, m, 1).getDay() + 7) % 7) + (n - 1) * 7;
+  return day > dim ? null : toIso(new Date(y, m, day));
+}
+
+export function describeSchedule(bill) {
+  if (bill.frequency !== "monthly_nth") return frequencyLabel(bill.frequency);
+  const parts = [...(bill.nth_weeks ?? [])].sort((a, b) => (a === -1 ? 9 : a) - (b === -1 ? 9 : b))
+    .map((n) => NTH_OPTIONS.find((o) => o.n === n)?.label.toLowerCase());
+  const joined = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
+  return `${joined[0].toUpperCase()}${joined.slice(1)} ${WEEKDAY_NAMES[bill.weekday]} of each month`;
+}
 
 // All dates a bill falls on within [start, end]
 function billDates(bill, rangeStart, end) {
@@ -26,6 +48,16 @@ function billDates(bill, rangeStart, end) {
   if (start > end) return [];
   if (bill.frequency === "once") return anchor >= start && anchor <= end ? [anchor] : [];
   const out = [];
+  if (bill.frequency === "monthly_nth") {
+    const s = fromIso(start), e = fromIso(end);
+    for (let y = s.getFullYear(), m = s.getMonth(); y < e.getFullYear() || (y === e.getFullYear() && m <= e.getMonth()); m === 11 ? (y++, m = 0) : m++) {
+      for (const n of bill.nth_weeks ?? []) {
+        const d = nthWeekday(y, m, bill.weekday, n);
+        if (d && d >= start && d <= end) out.push(d);
+      }
+    }
+    return out.sort();
+  }
   if (bill.frequency === "weekly" || bill.frequency === "biweekly") {
     const step = bill.frequency === "weekly" ? 7 : 14;
     const diff = Math.floor((fromIso(start) - fromIso(anchor)) / 86400000);

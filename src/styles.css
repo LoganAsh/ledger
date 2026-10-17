@@ -318,3 +318,7 @@ h1, h2 { margin: 0; }
 .seg button.on.in { background: var(--in); color: #fff; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .btn-text.danger { color: var(--red); align-self: center; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.chip { background: var(--surface); border: 1px solid var(--rule); border-radius: 99px; padding: 6px 12px; font-weight: 700; font-size: 0.85rem; color: var(--muted); }
+.chip.on { background: var(--green); border-color: var(--green); color: var(--paper); }

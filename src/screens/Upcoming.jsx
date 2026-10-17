@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import Sheet from "../components/Sheet";
 import { categoryName, dateLabel, money, moneyWhole, monthLabel } from "../lib/format";
 import { shiftMonth } from "../lib/finance";
-import { FREQUENCIES, addDays, buildSchedule, frequencyLabel, fromIso, todayIso } from "../lib/upcoming";
+import { FREQUENCIES, NTH_OPTIONS, WEEKDAY_NAMES, addDays, buildSchedule, describeSchedule, fromIso, todayIso } from "../lib/upcoming";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const SOURCE_LABEL = { bill: "Bill", income: "Expected income", recurring: "Estimated", card: "Card due", loan: "Loan payment" };
@@ -127,7 +127,7 @@ export default function Upcoming({ ledger, plaid, go }) {
                     <span className="tx-sub">
                       <span className={`tag tag-${e.direction === "in" ? "in" : e.source}`}>{label(e)}</span>
                       {e.paid ? " Paid" : e.overdue ? " Overdue" : ""}
-                      {e.autopay ? " Autopay" : ""}
+                      {e.autopay ? (e.direction === "in" ? " Direct deposit" : " Autopay") : ""}
                       {e.account ? ` ${e.account}` : ""}
                     </span>
                   </div>
@@ -183,6 +183,9 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
   const [amount, setAmount] = useState(init.amount != null ? String(init.amount) : "");
   const [frequency, setFrequency] = useState(init.frequency ?? "monthly");
   const [nextDue, setNextDue] = useState(init.next_due ?? todayIso());
+  const [weekday, setWeekday] = useState(init.weekday ?? 5);
+  const [nthWeeks, setNthWeeks] = useState(init.nth_weeks ?? [1, 3]);
+  const toggleNth = (n) => setNthWeeks((w) => (w.includes(n) ? w.filter((x) => x !== n) : [...w, n]));
   const [accountId, setAccountId] = useState(init.account_id ?? "");
   const [autopay, setAutopay] = useState(init.autopay ?? false);
   const [notes, setNotes] = useState(init.notes ?? "");
@@ -193,12 +196,15 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
     const n = Number(amount.replace(/[$,]/g, ""));
     if (!name.trim()) return setError(`Give the ${kind === "income" ? "income" : "bill"} a name.`);
     if (!Number.isFinite(n) || n < 0) return setError("Enter a valid amount.");
+    if (frequency === "monthly_nth" && !nthWeeks.length) return setError("Pick at least one week of the month.");
     setBusy(true);
     setError(null);
     try {
       await saveBill({
         ...(bill ? { id: bill.id } : {}),
         kind, name: name.trim(), amount: n, frequency, next_due: nextDue,
+        weekday: frequency === "monthly_nth" ? Number(weekday) : null,
+        nth_weeks: frequency === "monthly_nth" ? nthWeeks : null,
         account_id: accountId || null, autopay, notes: notes.trim() || null,
       });
       // Replacing an estimate: hide the auto-detected version so it isn't counted twice
@@ -231,7 +237,21 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
           </select>
         </label>
       </div>
-      <label className="field">{frequency === "once" ? "Due date" : "Next due date"}<input type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} /></label>
+      {frequency === "monthly_nth" && (
+        <div className="field">
+          <span>Which ones</span>
+          <div className="chips" role="group" aria-label="Weeks of the month">
+            {NTH_OPTIONS.map((o) => (
+              <button key={o.n} type="button" className={nthWeeks.includes(o.n) ? "chip on" : "chip"} aria-pressed={nthWeeks.includes(o.n)} onClick={() => toggleNth(o.n)}>{o.label}</button>
+            ))}
+          </div>
+          <select value={weekday} onChange={(e) => setWeekday(Number(e.target.value))} aria-label="Weekday">
+            {WEEKDAY_NAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}
+          </select>
+          {nthWeeks.length > 0 && <span className="meta">{describeSchedule({ frequency, weekday, nth_weeks: nthWeeks })}</span>}
+        </div>
+      )}
+      <label className="field">{frequency === "once" ? "Due date" : frequency === "monthly_nth" ? "Starting" : "Next due date"}<input type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} /></label>
       <label className="field">{kind === "income" ? "Deposited to" : "Paid from"}
         <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
           <option value="">Not specified</option>
