@@ -18,7 +18,7 @@ export function usePlaidConnect({ onLinked }) {
       try {
         if (itemId) {
           await callFunction("plaid-sync", { item_id: itemId });
-          setMessage(`${metadata?.institution?.name ?? "Bank"} reconnected.`);
+          setMessage(`${metadata?.institution?.name ?? "Bank"} updated.`);
         } else {
           const res = await callFunction("plaid-exchange", { public_token: publicToken });
           const name = res.institution_name ?? metadata?.institution?.name ?? "Bank";
@@ -43,12 +43,12 @@ export function usePlaidConnect({ onLinked }) {
 
   useEffect(() => { if (token && ready) open(); }, [token, ready, open]);
 
-  const start = useCallback(async (reconnectItemId = null) => {
+  const start = useCallback(async (reconnectItemId = null, { consent = false } = {}) => {
     setError(null);
     setMessage(null);
     setBusy(true);
     try {
-      const { link_token } = await callFunction("plaid-link-token", reconnectItemId ? { item_id: reconnectItemId } : {});
+      const { link_token } = await callFunction("plaid-link-token", reconnectItemId ? { item_id: reconnectItemId, consent } : {});
       setItemId(reconnectItemId);
       setToken(link_token);
     } catch (e) {

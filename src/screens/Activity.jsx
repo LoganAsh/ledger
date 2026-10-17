@@ -7,7 +7,7 @@ const PAGE = 150;
 
 export default function Activity({ ledger, initialFilter }) {
   const { transactions, accounts, updateTransaction } = ledger;
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialFilter?.query ?? "");
   const [accountId, setAccountId] = useState("");
   const [category, setCategory] = useState(initialFilter?.category ?? "");
   const [month, setMonth] = useState(initialFilter?.month ?? "");

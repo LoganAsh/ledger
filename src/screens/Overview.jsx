@@ -1,5 +1,6 @@
 import LineChart from "../components/LineChart";
 import { categoryName, dateLabel, money, moneyWhole, timeAgo } from "../lib/format";
+import { addDays, buildSchedule, todayIso } from "../lib/upcoming";
 import { balanceSummary, cumulativeByDay, currentMonthKey, monthTotals, netWorthHistory, shiftMonth, txCategory } from "../lib/finance";
 
 export default function Overview({ ledger, plaid, go }) {
@@ -29,6 +30,9 @@ export default function Overview({ ledger, plaid, go }) {
   const lastAtSameDay = lastCum[Math.min(today, lastCum.length) - 1] ?? 0;
   const pace = now.spent - lastAtSameDay;
   const recent = transactions.slice(0, 6);
+  const t0 = todayIso();
+  const soon = buildSchedule(ledger, t0, addDays(t0, 7)).filter((e) => !e.paid);
+  const soonTotal = soon.reduce((s, e) => s + e.amount, 0);
 
   return (
     <>
@@ -64,6 +68,24 @@ export default function Overview({ ledger, plaid, go }) {
           <p className="meta strip-note">Your net worth trend fills in as daily balances are recorded.</p>
         )}
       </section>
+
+      {soon.length > 0 && (
+        <section className="block">
+          <button className="block-head" onClick={() => go("upcoming")}>
+            <h2>Due this week</h2>
+            <span className="link">{moneyWhole(soonTotal)}</span>
+          </button>
+          <ul className="plain-list">
+            {soon.slice(0, 4).map((e) => (
+              <li key={e.key}>
+                <span>{e.name}<span className="tx-sub"> {dateLabel(e.date)}{e.estimated ? ", estimated" : ""}</span></span>
+                <span className={`num ${e.overdue ? "neg" : ""}`}>{money(e.amount)}</span>
+              </li>
+            ))}
+          </ul>
+          {soon.length > 4 && <p className="meta">{soon.length - 4} more this week.</p>}
+        </section>
+      )}
 
       <section className="block">
         <button className="block-head" onClick={() => go("spending")}>

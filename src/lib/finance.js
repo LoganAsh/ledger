@@ -106,7 +106,10 @@ export function recurringCharges(transactions) {
     const spread = Math.max(...amounts) - Math.min(...amounts);
     if (spread > Math.max(5, avg * 0.25)) continue;
     const last = txs.reduce((a, b) => (a.date > b.date ? a : b));
-    out.push({ name, avg, lastDate: last.date, category: txCategory(last) });
+    // Typical billing day: median day-of-month across charges
+    const days = txs.map((t) => Number(t.date.slice(8, 10))).sort((a, b) => a - b);
+    const day = days[Math.floor(days.length / 2)];
+    out.push({ name, avg, lastAmount: Number(last.amount), lastDate: last.date, day, accountId: last.account_id, category: txCategory(last) });
   }
   return out.sort((a, b) => b.avg - a.avg);
 }

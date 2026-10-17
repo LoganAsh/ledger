@@ -4,7 +4,9 @@ import { callFunction, fetchAll, supabase } from "./supabase";
 const HISTORY_MONTHS = 15;
 
 export function useLedger(session) {
-  const [state, setState] = useState({ loading: true, error: null, accounts: [], items: [], transactions: [], snapshots: [], budgets: [] });
+  const [state, setState] = useState({
+    loading: true, error: null, accounts: [], items: [], transactions: [], snapshots: [], budgets: [], bills: [], hiddenRecurring: [], liabilities: [],
+  });
   const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
@@ -14,14 +16,18 @@ export function useLedger(session) {
       since.setMonth(since.getMonth() - HISTORY_MONTHS);
       const sinceIso = since.toISOString().slice(0, 10);
 
-      const [accounts, items, budgets, transactions, snapshots] = await Promise.all([
+      const rows = (r) => { if (r.error) throw r.error; return r.data; };
+      const [accounts, items, budgets, transactions, snapshots, bills, hidden, liabilities] = await Promise.all([
         supabase.from("accounts").select("*").order("type").order("name").then((r) => { if (r.error) throw r.error; return r.data; }),
-        supabase.from("plaid_items").select("id, institution_name, status, last_error, last_synced_at, created_at").order("created_at").then((r) => { if (r.error) throw r.error; return r.data; }),
+        supabase.from("plaid_items").select("id, institution_name, status, liabilities_status, last_error, last_synced_at, created_at").order("created_at").then((r) => { if (r.error) throw r.error; return r.data; }),
         supabase.from("budgets").select("*").order("category").then((r) => { if (r.error) throw r.error; return r.data; }),
         fetchAll(() => supabase.from("transactions").select("*").gte("date", sinceIso).order("date", { ascending: false }).order("id")),
         fetchAll(() => supabase.from("balance_snapshots").select("account_id, snapshot_date, current_balance").gte("snapshot_date", sinceIso).order("snapshot_date").order("id")),
+        supabase.from("bills").select("*").order("next_due").then(rows),
+        supabase.from("recurring_hidden").select("id, merchant").then(rows),
+        supabase.from("liabilities").select("*").then(rows),
       ]);
-      setState({ loading: false, error: null, accounts, items, transactions, snapshots, budgets });
+      setState({ loading: false, error: null, accounts, items, transactions, snapshots, budgets, bills, hiddenRecurring: hidden, liabilities });
     } catch (e) {
       setState((s) => ({ ...s, loading: false, error: e.message }));
     }
@@ -68,5 +74,40 @@ export function useLedger(session) {
     setState((s) => ({ ...s, budgets: s.budgets.filter((b) => b.id !== id) }));
   }, []);
 
-  return { ...state, syncing, reload: load, sync, updateTransaction, updateAccount, saveBudget, deleteBudget };
+  const saveBill = useCallback(async (bill) => {
+    const { id, ...fields } = bill;
+    const query = id
+      ? supabase.from("bills").update(fields).eq("id", id)
+      : supabase.from("bills").insert({ ...fields, user_id: session.user.id });
+    const { data, error } = await query.select().single();
+    if (error) throw error;
+    setState((s) => ({ ...s, bills: [...s.bills.filter((b) => b.id !== data.id), data] }));
+  }, [session]);
+
+  const deleteBill = useCallback(async (id) => {
+    const { error } = await supabase.from("bills").delete().eq("id", id);
+    if (error) throw error;
+    setState((s) => ({ ...s, bills: s.bills.filter((b) => b.id !== id) }));
+  }, []);
+
+  const hideRecurring = useCallback(async (merchant) => {
+    const { data, error } = await supabase
+      .from("recurring_hidden")
+      .upsert({ user_id: session.user.id, merchant }, { onConflict: "user_id,merchant" })
+      .select("id, merchant")
+      .single();
+    if (error) throw error;
+    setState((s) => ({ ...s, hiddenRecurring: [...s.hiddenRecurring.filter((h) => h.merchant !== merchant), data] }));
+  }, [session]);
+
+  const unhideRecurring = useCallback(async (id) => {
+    const { error } = await supabase.from("recurring_hidden").delete().eq("id", id);
+    if (error) throw error;
+    setState((s) => ({ ...s, hiddenRecurring: s.hiddenRecurring.filter((h) => h.id !== id) }));
+  }, []);
+
+  return {
+    ...state, syncing, reload: load, sync, updateTransaction, updateAccount, saveBudget, deleteBudget,
+    saveBill, deleteBill, hideRecurring, unhideRecurring,
+  };
 }

@@ -72,7 +72,11 @@ export default function Accounts({ ledger, plaid }) {
                     {" "}{i.status === "active" ? `Updated ${timeAgo(i.last_synced_at)}` : i.status === "login_required" ? "Sign-in needed" : "Last update failed"}
                   </span>
                 </span>
-                {i.status !== "active" && <button className="btn-quiet" onClick={() => plaid.start(i.id)} disabled={plaid.busy}>Sign in</button>}
+                {i.status !== "active" ? (
+                  <button className="btn-quiet" onClick={() => plaid.start(i.id)} disabled={plaid.busy}>Sign in</button>
+                ) : i.liabilities_status === "consent_required" ? (
+                  <button className="btn-quiet" onClick={() => plaid.start(i.id, { consent: true })} disabled={plaid.busy}>Share due dates</button>
+                ) : null}
               </li>
             ))}
           </ul>

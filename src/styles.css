@@ -266,3 +266,38 @@ h1, h2 { margin: 0; }
 .auth-form { width: 100%; display: flex; flex-direction: column; gap: 14px; text-align: left; margin-bottom: 12px; }
 .auth-form label { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
 .auth-form input { color: var(--ink); }
+
+/* Upcoming */
+.cover {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-lg);
+  padding: 16px 18px; margin-bottom: 20px;
+}
+.cover-rows { margin: 12px 0 0; border-top: 1px solid var(--rule); }
+.cover-rows div { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; font-size: 0.92rem; }
+.cover-rows dt { color: var(--muted); }
+.cover-rows dd { margin: 0; font-weight: 700; }
+
+.calendar { margin-bottom: 6px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.cal-wd { text-align: center; font-size: 0.72rem; font-weight: 700; color: var(--muted); padding: 4px 0; }
+.cal-day {
+  aspect-ratio: 1 / 1.08; min-height: 44px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px;
+  padding: 6px 2px 4px; background: none; border: 1px solid transparent; border-radius: var(--radius-sm);
+}
+.cal-num { font-size: 0.88rem; font-weight: 600; }
+.cal-amt { font-size: 0.66rem; font-weight: 700; color: var(--paper); background: var(--green-mid); border-radius: 99px; padding: 1px 5px; line-height: 1.35; }
+.cal-day.has { background: var(--green-soft); }
+.cal-day.past { opacity: 0.5; }
+.cal-day.today .cal-num { color: var(--margin); font-weight: 800; }
+.cal-day.today { border-color: var(--margin); }
+.cal-day.selected { border-color: var(--ink); background: var(--surface); }
+
+.due-date { margin: 14px 0 0; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
+.tx-list li:first-child .due-date { margin-top: 0; }
+.tag { font-weight: 700; }
+.tag-bill { color: var(--green); }
+.tag-recurring { color: var(--muted); }
+.tag-card { color: var(--amber); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn-text.danger { color: var(--red); align-self: center; }

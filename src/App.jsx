@@ -7,12 +7,14 @@ import Overview from "./screens/Overview";
 import Activity from "./screens/Activity";
 import Spending from "./screens/Spending";
 import Accounts from "./screens/Accounts";
+import Upcoming from "./screens/Upcoming";
 import Notice from "./components/Notice";
-import { AccountsIcon, ActivityIcon, OverviewIcon, SpendingIcon } from "./components/Icons";
+import { AccountsIcon, ActivityIcon, OverviewIcon, SpendingIcon, UpcomingIcon } from "./components/Icons";
 
 const TABS = [
   { id: "overview", label: "Overview", Icon: OverviewIcon },
   { id: "activity", label: "Activity", Icon: ActivityIcon },
+  { id: "upcoming", label: "Upcoming", Icon: UpcomingIcon },
   { id: "spending", label: "Spending", Icon: SpendingIcon },
   { id: "accounts", label: "Accounts", Icon: AccountsIcon },
 ];
@@ -53,6 +55,7 @@ function Ledger({ session }) {
           <>
             {tab === "overview" && <Overview {...props} />}
             {tab === "activity" && <Activity {...props} initialFilter={activityFilter} />}
+            {tab === "upcoming" && <Upcoming {...props} />}
             {tab === "spending" && <Spending {...props} />}
             {tab === "accounts" && <Accounts {...props} />}
           </>
