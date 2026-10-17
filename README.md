@@ -10,7 +10,9 @@ Private personal finance dashboard: every checking, savings, credit and loan acc
   - Daily `pg_cron` job calls `plaid-sync` at 12:00 UTC
 - **Bank data:** Plaid (Transactions product)
 
-## Environment variables (Vercel)
+## Environment variables
+Committed in `.env.production` (both are browser-safe). Vercel env vars with the same names override them.
+
 | Name | Value |
 | --- | --- |
 | `VITE_SUPABASE_URL` | `https://mnhncbvwxjscjjvyodgx.supabase.co` |
