@@ -31,7 +31,7 @@ export default function Overview({ ledger, plaid, go }) {
   const pace = now.spent - lastAtSameDay;
   const recent = transactions.slice(0, 6);
   const t0 = todayIso();
-  const soon = buildSchedule(ledger, t0, addDays(t0, 7)).filter((e) => !e.paid);
+  const soon = buildSchedule(ledger, t0, addDays(t0, 7)).filter((e) => !e.paid && e.direction === "out");
   const soonTotal = soon.reduce((s, e) => s + e.amount, 0);
 
   return (

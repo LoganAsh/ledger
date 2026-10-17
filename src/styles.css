@@ -1,5 +1,9 @@
 :root {
   color-scheme: light;
+  --in: #2E7D4F;
+  --out: #B5443F;
+  --today: #DDEBF8;
+  --today-ink: #2D5F8A;
   --paper: #EEF2EC;
   --surface: #F8FAF7;
   --ink: #1A2620;
@@ -30,6 +34,10 @@
     --red: #E2847B;
     --margin: #B4564F;
     --amber: #D9A647;
+    --in: #5DBB84;
+    --out: #E07068;
+    --today: #1D3347;
+    --today-ink: #9CC6EC;
   }
 }
 
@@ -286,11 +294,12 @@ h1, h2 { margin: 0; }
   padding: 6px 2px 4px; background: none; border: 1px solid transparent; border-radius: var(--radius-sm);
 }
 .cal-num { font-size: 0.88rem; font-weight: 600; }
-.cal-amt { font-size: 0.66rem; font-weight: 700; color: var(--paper); background: var(--green-mid); border-radius: 99px; padding: 1px 5px; line-height: 1.35; }
-.cal-day.has { background: var(--green-soft); }
+.cal-amt { font-size: 0.64rem; font-weight: 700; color: #fff; border-radius: 99px; padding: 0 5px; line-height: 1.4; }
+.cal-amt.in { background: var(--in); }
+.cal-amt.out { background: var(--out); }
 .cal-day.past { opacity: 0.5; }
-.cal-day.today .cal-num { color: var(--margin); font-weight: 800; }
-.cal-day.today { border-color: var(--margin); }
+.cal-day.today { background: var(--today); }
+.cal-day.today .cal-num { color: var(--today-ink); font-weight: 800; }
 .cal-day.selected { border-color: var(--ink); background: var(--surface); }
 
 .due-date { margin: 14px 0 0; font-size: 0.8rem; font-weight: 700; color: var(--muted); }
@@ -299,5 +308,13 @@ h1, h2 { margin: 0; }
 .tag-bill { color: var(--green); }
 .tag-recurring { color: var(--muted); }
 .tag-card { color: var(--amber); }
+.tag-loan { color: var(--amber); }
+.tag-in { color: var(--in); }
+.cover-total { border-top: 1px solid var(--rule); margin-top: 8px; padding-bottom: 0; }
+.cover-total dt { color: var(--ink); font-weight: 700; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1px solid var(--rule); border-radius: 99px; padding: 3px; }
+.seg button { background: none; border: 0; border-radius: 99px; padding: 8px; font-weight: 700; color: var(--muted); }
+.seg button.on.out { background: var(--out); color: #fff; }
+.seg button.on.in { background: var(--in); color: #fff; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .btn-text.danger { color: var(--red); align-self: center; }

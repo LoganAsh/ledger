@@ -5,7 +5,8 @@ import { shiftMonth } from "../lib/finance";
 import { FREQUENCIES, addDays, buildSchedule, frequencyLabel, fromIso, todayIso } from "../lib/upcoming";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
-const SOURCE_LABEL = { bill: "Bill", recurring: "Estimated", card: "Card due" };
+const SOURCE_LABEL = { bill: "Bill", income: "Expected income", recurring: "Estimated", card: "Card due", loan: "Loan payment" };
+const label = (e) => (e.source === "bill" && e.direction === "in" ? "Income" : SOURCE_LABEL[e.source]);
 
 export default function Upcoming({ ledger, plaid, go }) {
   const { accounts, items, hiddenRecurring, unhideRecurring } = ledger;
@@ -30,7 +31,8 @@ export default function Upcoming({ ledger, plaid, go }) {
   }, [schedule]);
 
   const next30 = schedule.filter((e) => e.date >= today && e.date <= horizon && !e.paid);
-  const due30 = next30.reduce((s, e) => s + e.amount, 0);
+  const due30 = next30.filter((e) => e.direction === "out").reduce((s, e) => s + e.amount, 0);
+  const income30 = next30.filter((e) => e.direction === "in").reduce((s, e) => s + e.amount, 0);
   const cash = accounts.filter((a) => a.type === "depository" && !a.is_hidden).reduce((s, a) => s + Number(a.available_balance ?? a.current_balance ?? 0), 0);
   const consentItems = items.filter((i) => i.liabilities_status === "consent_required");
 
@@ -47,7 +49,7 @@ export default function Upcoming({ ledger, plaid, go }) {
     <>
       <header className="page-head">
         <h1 className="page-title">Upcoming</h1>
-        <button className="btn-primary sm" onClick={() => setOpen({ type: "new" })}>Add bill</button>
+        <button className="btn-primary sm" onClick={() => setOpen({ type: "new" })}>Add</button>
       </header>
 
       <section className="cover">
@@ -57,7 +59,9 @@ export default function Upcoming({ ledger, plaid, go }) {
         </div>
         <dl className="cover-rows">
           <div><dt>Cash in checking & savings</dt><dd>{money(cash)}</dd></div>
-          <div><dt>Left after payments</dt><dd className={cash - due30 < 0 ? "neg" : ""}>{money(cash - due30)}</dd></div>
+          <div><dt>Expected income</dt><dd className="pos">+{money(income30)}</dd></div>
+          <div><dt>Payments due</dt><dd className="neg">−{money(due30)}</dd></div>
+          <div className="cover-total"><dt>Projected in 30 days</dt><dd className={cash + income30 - due30 < 0 ? "neg" : ""}>{money(cash + income30 - due30)}</dd></div>
         </dl>
       </section>
 
@@ -79,18 +83,22 @@ export default function Upcoming({ ledger, plaid, go }) {
           {cells.map((iso, i) => {
             if (!iso) return <span key={`x${i}`} />;
             const entries = byDate.get(iso) ?? [];
-            const total = entries.filter((e) => !e.paid).reduce((s, e) => s + e.amount, 0);
+            const live = entries.filter((e) => !e.paid);
+            const outTotal = live.filter((e) => e.direction === "out").reduce((s, e) => s + e.amount, 0);
+            const inTotal = live.filter((e) => e.direction === "in").reduce((s, e) => s + e.amount, 0);
+            const short = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
             const cls = ["cal-day", iso === today && "today", iso < today && "past", iso === selected && "selected", entries.length && "has"].filter(Boolean).join(" ");
             return (
               <button
                 key={iso}
                 className={cls}
                 onClick={() => setSelected(iso === selected ? null : iso)}
-                aria-label={`${dateLabel(iso)}${entries.length ? `, ${entries.length} payment${entries.length > 1 ? "s" : ""}, ${money(total)}` : ""}`}
+                aria-label={`${dateLabel(iso)}${inTotal ? `, ${money(inTotal)} coming in` : ""}${outTotal ? `, ${money(outTotal)} going out` : ""}`}
                 aria-pressed={iso === selected}
               >
                 <span className="cal-num">{Number(iso.slice(8))}</span>
-                {entries.length > 0 && <span className="cal-amt">{total >= 1000 ? `${(total / 1000).toFixed(1)}k` : Math.round(total)}</span>}
+                {inTotal > 0 && <span className="cal-amt in">{short(inTotal)}</span>}
+                {outTotal > 0 && <span className="cal-amt out">{short(outTotal)}</span>}
               </button>
             );
           })}
@@ -104,7 +112,7 @@ export default function Upcoming({ ledger, plaid, go }) {
         </div>
         {!list.length && (
           <p className="meta">
-            {listDate ? "Nothing due this day." : "Nothing expected in the next 30 days. Add a bill, or check back once more transaction history has synced."}
+            {listDate ? "Nothing expected this day." : "Nothing expected in the next 30 days. Add a bill or income, or check back once more transaction history has synced."}
           </p>
         )}
         <ul className="tx-list">
@@ -117,13 +125,15 @@ export default function Upcoming({ ledger, plaid, go }) {
                   <div className="tx-main">
                     <span className="tx-name">{e.name}</span>
                     <span className="tx-sub">
-                      <span className={`tag tag-${e.source}`}>{SOURCE_LABEL[e.source]}</span>
+                      <span className={`tag tag-${e.direction === "in" ? "in" : e.source}`}>{label(e)}</span>
                       {e.paid ? " Paid" : e.overdue ? " Overdue" : ""}
                       {e.autopay ? " Autopay" : ""}
                       {e.account ? ` ${e.account}` : ""}
                     </span>
                   </div>
-                  <span className={`tx-amt ${e.overdue ? "neg" : ""}`}>{e.estimated ? "≈" : ""}{money(e.amount)}</span>
+                  <span className={`tx-amt ${e.direction === "in" ? "pos" : e.overdue ? "neg" : ""}`}>
+                    {e.estimated ? "≈" : ""}{e.direction === "in" ? "+" : ""}{money(e.amount)}
+                  </span>
                 </button>
               </li>
             );
@@ -151,8 +161,8 @@ export default function Upcoming({ ledger, plaid, go }) {
 
       {open?.type === "new" && <BillSheet ledger={ledger} prefill={open.prefill} onClose={() => setOpen(null)} />}
       {open?.type === "bill" && <BillSheet ledger={ledger} bill={open.entry.bill} onClose={() => setOpen(null)} />}
-      {open?.type === "recurring" && (
-        <RecurringSheet
+      {["recurring", "income", "loan"].includes(open?.type) && (
+        <EstimateSheet
           entry={open.entry}
           ledger={ledger}
           onClose={() => setOpen(null)}
@@ -168,6 +178,7 @@ export default function Upcoming({ ledger, plaid, go }) {
 function BillSheet({ ledger, bill, prefill, onClose }) {
   const { accounts, saveBill, deleteBill, hideRecurring } = ledger;
   const init = bill ?? prefill ?? {};
+  const [kind, setKind] = useState(init.kind ?? "expense");
   const [name, setName] = useState(init.name ?? "");
   const [amount, setAmount] = useState(init.amount != null ? String(init.amount) : "");
   const [frequency, setFrequency] = useState(init.frequency ?? "monthly");
@@ -180,14 +191,14 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
 
   async function save() {
     const n = Number(amount.replace(/[$,]/g, ""));
-    if (!name.trim()) return setError("Give the bill a name.");
+    if (!name.trim()) return setError(`Give the ${kind === "income" ? "income" : "bill"} a name.`);
     if (!Number.isFinite(n) || n < 0) return setError("Enter a valid amount.");
     setBusy(true);
     setError(null);
     try {
       await saveBill({
         ...(bill ? { id: bill.id } : {}),
-        name: name.trim(), amount: n, frequency, next_due: nextDue,
+        kind, name: name.trim(), amount: n, frequency, next_due: nextDue,
         account_id: accountId || null, autopay, notes: notes.trim() || null,
       });
       // Replacing an estimate: hide the auto-detected version so it isn't counted twice
@@ -206,8 +217,12 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
   }
 
   return (
-    <Sheet title={bill ? "Edit bill" : "Add bill"} onClose={onClose}>
-      <label className="field">Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Rent, truck payment, insurance…" /></label>
+    <Sheet title={bill ? (kind === "income" ? "Edit income" : "Edit bill") : "Add to calendar"} onClose={onClose}>
+      <div className="seg" role="radiogroup" aria-label="Type">
+        <button role="radio" aria-checked={kind === "expense"} className={kind === "expense" ? "on out" : ""} onClick={() => setKind("expense")}>Payment</button>
+        <button role="radio" aria-checked={kind === "income"} className={kind === "income" ? "on in" : ""} onClick={() => setKind("income")}>Income</button>
+      </div>
+      <label className="field">Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === "income" ? "Paycheck, client payment, rental income…" : "Rent, truck payment, insurance…"} /></label>
       <div className="field-row">
         <label className="field">Amount<input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /></label>
         <label className="field">How often
@@ -217,51 +232,66 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
         </label>
       </div>
       <label className="field">{frequency === "once" ? "Due date" : "Next due date"}<input type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} /></label>
-      <label className="field">Paid from
+      <label className="field">{kind === "income" ? "Deposited to" : "Paid from"}
         <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
           <option value="">Not specified</option>
           {accounts.filter((a) => !a.is_hidden).map((a) => <option key={a.id} value={a.id}>{a.nickname || a.name}{a.mask ? ` ••${a.mask}` : ""}</option>)}
         </select>
       </label>
-      <label className="toggle"><input type="checkbox" checked={autopay} onChange={(e) => setAutopay(e.target.checked)} /><span>Paid automatically</span></label>
+      <label className="toggle"><input type="checkbox" checked={autopay} onChange={(e) => setAutopay(e.target.checked)} /><span>{kind === "income" ? "Direct deposit" : "Paid automatically"}</span></label>
       <label className="field">Note<textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Account number, website, anything useful" /></label>
       {prefill?.fromRecurring && <p className="meta">Saving this hides the estimated version so it isn’t counted twice.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
-      <button className="btn-primary" onClick={save} disabled={busy}>{busy ? "Saving…" : bill ? "Save changes" : "Add bill"}</button>
-      {bill && <button className="btn-text danger" onClick={remove} disabled={busy}>Delete bill</button>}
+      <button className="btn-primary" onClick={save} disabled={busy}>{busy ? "Saving…" : bill ? "Save changes" : kind === "income" ? "Add income" : "Add bill"}</button>
+      {bill && <button className="btn-text danger" onClick={remove} disabled={busy}>Delete</button>}
     </Sheet>
   );
 }
 
-function RecurringSheet({ entry, ledger, onClose, onConvert, go }) {
-  const r = entry.recurring;
+function EstimateSheet({ entry, ledger, onClose, onConvert, go }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const isIncome = entry.source === "income";
+  const isLoan = entry.source === "loan";
+  const src = entry.recurring ?? entry.income ?? entry.loan;
+  const lastAmount = src.lastAmount ?? src.amount;
+  const freq = isIncome ? src.frequency : "monthly";
+  const freqText = { weekly: "Every week", biweekly: "Every 2 weeks", semimonthly: "Twice a month", monthly: `Around day ${src.day} of the month` }[freq];
 
   async function hide() {
     setBusy(true);
-    try { await ledger.hideRecurring(r.name); onClose(); } catch (e) { setError(e.message); setBusy(false); }
+    try { await ledger.hideRecurring(entry.name); onClose(); } catch (e) { setError(e.message); setBusy(false); }
   }
 
   return (
-    <Sheet title={r.name} onClose={onClose}>
-      <p className="sheet-figure">≈{money(r.avg)}</p>
+    <Sheet title={entry.name} onClose={onClose}>
+      <p className={`sheet-figure ${isIncome ? "pos" : ""}`}>≈{isIncome ? "+" : ""}{money(entry.amount)}</p>
       <dl className="detail-list">
         <div><dt>Expected</dt><dd>{dateLabel(entry.date)}</dd></div>
-        <div><dt>Usually charged</dt><dd>Around day {r.day} of the month</dd></div>
-        <div><dt>Last charge</dt><dd>{money(r.lastAmount)} on {dateLabel(r.lastDate)}</dd></div>
-        <div><dt>Category</dt><dd>{categoryName(r.category)}</dd></div>
-        {entry.account && <div><dt>Charged to</dt><dd>{entry.account}</dd></div>}
+        <div><dt>Schedule</dt><dd>{freqText}</dd></div>
+        <div><dt>Last {isIncome ? "deposit" : "payment"}</dt><dd>{money(lastAmount)} on {dateLabel(src.lastDate)}</dd></div>
+        {isIncome && !src.steady && <div><dt>Amount</dt><dd>Varies, averaged over last 3</dd></div>}
+        {isLoan && <div><dt>Loan balance</dt><dd>{money(src.account.current_balance)}</dd></div>}
+        {entry.recurring && <div><dt>Category</dt><dd>{categoryName(src.category)}</dd></div>}
+        {entry.account && <div><dt>{isIncome ? "Deposited to" : "Charged to"}</dt><dd>{entry.account}</dd></div>}
       </dl>
-      <p className="meta">Estimated from your transaction history. Turn it into a bill to set the exact amount and date.</p>
+      <p className="meta">
+        {isLoan
+          ? "Your bank doesn’t report due dates for this loan, so this is projected from your last payment. Turn it into a bill to set the exact due date."
+          : `Estimated from your transaction history. Turn it into ${isIncome ? "an income entry" : "a bill"} to set the exact amount and date.`}
+      </p>
       {error && <p className="form-error" role="alert">{error}</p>}
       <button
         className="btn-primary"
-        onClick={() => onConvert({ name: r.name, amount: Math.round(r.lastAmount * 100) / 100, frequency: "monthly", next_due: entry.date, account_id: r.accountId, fromRecurring: r.name })}
+        onClick={() => onConvert({
+          name: entry.name, amount: Math.round(entry.amount * 100) / 100,
+          frequency: freq === "semimonthly" ? "biweekly" : freq, next_due: entry.date,
+          account_id: src.accountId ?? null, kind: isIncome ? "income" : "expense", fromRecurring: entry.name,
+        })}
       >
-        Turn into a bill
+        {isIncome ? "Turn into income entry" : "Turn into a bill"}
       </button>
-      <button className="btn-quiet wide" onClick={() => { onClose(); go("activity", { query: r.name }); }}>See past charges</button>
+      {!isLoan && <button className="btn-quiet wide" onClick={() => { onClose(); go("activity", { query: entry.name.split(" ")[0] }); }}>See past {isIncome ? "deposits" : "charges"}</button>}
       <button className="btn-text danger" onClick={hide} disabled={busy}>Hide from calendar</button>
     </Sheet>
   );

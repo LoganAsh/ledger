@@ -1,4 +1,4 @@
-import { recurringCharges } from "./finance";
+import { loanPayments, recurringCharges, recurringIncome } from "./finance";
 
 // Date helpers on plain YYYY-MM-DD strings (local calendar days, no time zones)
 export const toIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -55,6 +55,7 @@ export function buildSchedule({ bills, transactions, liabilities, accounts, hidd
     for (const date of billDates(b, start, end)) {
       out.push({
         key: `bill-${b.id}-${date}`, date, name: b.name, amount: Number(b.amount), source: "bill",
+        direction: b.kind === "income" ? "in" : "out",
         autopay: b.autopay, account: accountName.get(b.account_id), bill: b,
       });
     }
@@ -69,7 +70,7 @@ export function buildSchedule({ bills, transactions, liabilities, accounts, hidd
       // Skip months where this charge already posted
       if (date < start || date > end || date.slice(0, 7) <= r.lastDate.slice(0, 7)) continue;
       out.push({
-        key: `rec-${r.name}-${date}`, date, name: r.name, amount: r.avg, source: "recurring",
+        key: `rec-${r.name}-${date}`, date, name: r.name, amount: r.avg, source: "recurring", direction: "out",
         estimated: true, account: accountName.get(r.accountId), recurring: r,
       });
     }
@@ -87,9 +88,50 @@ export function buildSchedule({ bills, transactions, liabilities, accounts, hidd
       key: `card-${l.account_id}-${l.next_payment_due_date}`, date: l.next_payment_due_date,
       name: acct.nickname || acct.name, amount: isCard ? (statement ?? Number(l.minimum_payment_amount ?? 0)) : Number(l.minimum_payment_amount ?? 0),
       minimum: l.minimum_payment_amount != null ? Number(l.minimum_payment_amount) : null,
-      source: "card", paid, overdue: l.is_overdue, liability: l, accountObj: acct,
+      source: "card", direction: "out", paid, overdue: l.is_overdue, liability: l, accountObj: acct,
     });
   }
 
+  // Expected income: paychecks and deposits on a steady schedule
+  for (const r of recurringIncome(transactions)) {
+    if (hidden.has(r.name)) continue;
+    for (const date of incomeDates(r, start, end)) {
+      out.push({
+        key: `inc-${r.name}-${date}`, date, name: r.name, amount: r.avg, source: "income", direction: "in",
+        estimated: true, account: accountName.get(r.accountId), income: r,
+      });
+    }
+  }
+
+  // Auto and personal loans: same day each month as the last payment
+  for (const lp of loanPayments(transactions, accounts, liabilities)) {
+    const name = lp.account.nickname || lp.account.name;
+    if (hidden.has(name)) continue;
+    const s = fromIso(start), e = fromIso(end);
+    for (let y = s.getFullYear(), m = s.getMonth(); y < e.getFullYear() || (y === e.getFullYear() && m <= e.getMonth()); m === 11 ? (y++, m = 0) : m++) {
+      const date = monthDate(y, m, lp.day);
+      if (date < start || date > end || date.slice(0, 7) <= lp.lastDate.slice(0, 7)) continue;
+      out.push({
+        key: `loan-${lp.account.id}-${date}`, date, name, amount: lp.amount, source: "loan", direction: "out",
+        estimated: true, loan: lp, accountObj: lp.account,
+      });
+    }
+  }
+
   return out.sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
+}
+
+function incomeDates(r, start, end) {
+  const out = [];
+  if (r.frequency === "monthly") {
+    const s = fromIso(start), e = fromIso(end);
+    for (let y = s.getFullYear(), m = s.getMonth(); y < e.getFullYear() || (y === e.getFullYear() && m <= e.getMonth()); m === 11 ? (y++, m = 0) : m++) {
+      const d = monthDate(y, m, r.day);
+      if (d > r.lastDate && d >= start && d <= end) out.push(d);
+    }
+    return out;
+  }
+  let d = addDays(r.lastDate, r.step);
+  while (d <= end) { if (d >= start) out.push(d); d = addDays(d, r.step); }
+  return out;
 }

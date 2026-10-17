@@ -113,3 +113,60 @@ export function recurringCharges(transactions) {
   }
   return out.sort((a, b) => b.avg - a.avg);
 }
+
+// Display name and grouping key for deposits, whose bank descriptions vary
+// ("CO: LIGHTNING RIDGE" vs "CO: LIGHTNING RIDG", changing reference numbers)
+function payerName(t) {
+  const raw = t.merchant_name || (t.name.includes("CO:") ? t.name.split("CO:").pop() : t.name);
+  const clean = raw.replace(/["“”]/g, "").replace(/\b\d[\d/.-]*\b/g, "").replace(/\s+/g, " ").trim();
+  const title = clean.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\b(Llc|Inc|Co)\b/g, (w) => w.toUpperCase());
+  return { name: title, key: clean.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 12) };
+}
+
+const DAY = 86400000;
+const daysBetween = (a, b) => Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / DAY);
+
+// Paychecks and other income that arrive on a steady schedule
+export function recurringIncome(transactions) {
+  const today = new Date().toLocaleDateString("en-CA");
+  const groups = new Map();
+  for (const t of transactions) {
+    if (t.is_excluded || t.amount >= 0 || txCategory(t) !== "INCOME") continue;
+    if (daysBetween(t.date, today) > 150 || -t.amount < 20) continue;
+    const { name, key } = payerName(t);
+    if (!groups.has(key)) groups.set(key, { name, txs: [] });
+    groups.get(key).txs.push(t);
+  }
+  const out = [];
+  for (const { txs } of groups.values()) {
+    if (txs.length < 3) continue;
+    txs.sort((a, b) => a.date.localeCompare(b.date));
+    const gaps = txs.slice(1).map((t, i) => daysBetween(txs[i].date, t.date)).filter((g) => g > 0).sort((a, b) => a - b);
+    if (!gaps.length) continue;
+    const median = gaps[Math.floor(gaps.length / 2)];
+    const frequency = median <= 9 ? "weekly" : median <= 17 ? "biweekly" : median <= 21 ? "semimonthly" : "monthly";
+    const step = { weekly: 7, biweekly: 14, semimonthly: 15, monthly: 30 }[frequency];
+    const last = txs.at(-1);
+    const displayName = payerName(last).name;
+    // Stopped arriving (e.g. a job or benefit that ended)
+    if (daysBetween(last.date, today) > Math.max(step * 1.6, step + 6)) continue;
+    const recent = txs.slice(-3).map((t) => -Number(t.amount));
+    const avg = recent.reduce((s, v) => s + v, 0) / recent.length;
+    out.push({ name: displayName, avg, lastAmount: -Number(last.amount), lastDate: last.date, frequency, step, day: Number(last.date.slice(8, 10)), accountId: last.account_id, steady: Math.max(...recent) - Math.min(...recent) <= avg * 0.1 });
+  }
+  return out.sort((a, b) => b.avg - a.avg);
+}
+
+// Loans Plaid can't report due dates for (auto, personal): project from the last payment received
+export function loanPayments(transactions, accounts, liabilities) {
+  const covered = new Set(liabilities.filter((l) => l.next_payment_due_date).map((l) => l.account_id));
+  const out = [];
+  for (const a of accounts) {
+    if (a.type !== "loan" || a.is_hidden || covered.has(a.id) || !(Number(a.current_balance) > 0)) continue;
+    const payments = transactions.filter((t) => t.account_id === a.id && t.amount < 0).sort((x, y) => y.date.localeCompare(x.date));
+    if (!payments.length) continue;
+    const last = payments[0];
+    out.push({ account: a, amount: -Number(last.amount), lastDate: last.date, day: Number(last.date.slice(8, 10)) });
+  }
+  return out;
+}
