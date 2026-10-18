@@ -9,7 +9,7 @@ export const REWARD_CATEGORIES = {
   gas: "Gas",
   costco_gas: "Costco gas",
   costco: "Costco",
-  wholesale: "Wholesale clubs",
+  wholesale: "Sam’s Club",
   travel: "Travel",
   streaming: "Streaming",
   entertainment: "Entertainment",
