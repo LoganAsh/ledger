@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { dateLabel, money, moneyWhole } from "../lib/format";
-import { REWARD_CATEGORIES, bestCards, computeRewards, discoverQuarters, programFor, quarterOf } from "../lib/rewards";
+import { REWARD_CATEGORIES, bestCards, computeRewards, discoverQuarters, p2pAccountIds, programFor, quarterOf } from "../lib/rewards";
 
 const pct = (r) => `${parseFloat(r.toFixed(2))}%`;
 const rateDisplay = (program, rate) => {
@@ -67,13 +67,13 @@ function DiscoverQuarters({ quarters, today }) {
 }
 
 export default function Rewards({ ledger, go }) {
-  const { transactions, accounts } = ledger;
+  const { transactions, accounts, items } = ledger;
   const today = new Date().toLocaleDateString("en-CA");
   const yearStart = `${today.slice(0, 4)}-01-01`;
   const [openCard, setOpenCard] = useState(null);
 
   const data = useMemo(() => {
-    const { rows, usage } = computeRewards(transactions, accounts, yearStart);
+    const { rows, usage } = computeRewards(transactions, accounts, yearStart, p2pAccountIds(items, accounts));
     const best = bestCards(accounts, usage, today);
     const cards = accounts.filter((a) => a.type === "credit" && !a.is_hidden);
     const programs = cards.map(programFor).filter(Boolean);
@@ -103,7 +103,7 @@ export default function Rewards({ ledger, go }) {
     const discoverIds = cards.filter((a) => programFor(a)?.id === "discover").map((a) => a.id);
     const quarters = discoverIds.length ? discoverQuarters(rows, discoverIds, today.slice(0, 4)) : [];
     return { earned, missed, best, byCard, byCat, misses: misses.sort((a, b) => b.gap - a.gap).slice(0, 6), monthsElapsed, cards, quarters };
-  }, [transactions, accounts, yearStart, today]);
+  }, [transactions, accounts, items, yearStart, today]);
 
   const debit = data.byCard.get("debit");
   const hasDiscover = data.cards.some((a) => programFor(a)?.id === "discover");
@@ -220,7 +220,7 @@ export default function Rewards({ ledger, go }) {
 
       <p className="meta fine">
         Estimates use each card’s published earn rates and your bank’s merchant categories, which don’t always match how the card issuer codes a purchase.
-        Capital One Travel and Entertainment portal bonuses aren’t counted. Points and miles are valued at 1¢.
+        Capital One Travel and Entertainment portal bonuses aren’t counted. Rent, taxes and Venmo, PayPal or Zelle payments are left out since they can’t normally go on a card. Points and miles are valued at 1¢.
         {unknownCards.length ? ` No rewards program found for ${unknownCards.map(cardLabel).join(", ")}.` : ""}
         {" "}Cards you haven’t linked aren’t included.
       </p>

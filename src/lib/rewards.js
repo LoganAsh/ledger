@@ -22,7 +22,17 @@ export const REWARD_CATEGORIES = {
 };
 
 const NOT_PURCHASES = ["TRANSFER_IN", "TRANSFER_OUT", "LOAN_PAYMENTS", "INCOME", "BANK_FEES"];
-export const isPurchase = (t) => t.amount > 0 && !NOT_PURCHASES.includes(t.category_primary);
+// Payments that generally can't go on a credit card without a fee
+const NOT_CARD_PAYABLE = ["RENT_AND_UTILITIES_RENT", "GOVERNMENT_AND_NON_PROFIT_TAX_PAYMENT"];
+export const isPurchase = (t) =>
+  t.amount > 0 && !NOT_PURCHASES.includes(t.category_primary) && !NOT_CARD_PAYABLE.includes(t.category_detailed);
+
+// Peer-to-peer wallets (Venmo, PayPal, Cash App): payments there are to people, not card purchases
+const P2P = /venmo|paypal|cash ?app|zelle/i;
+export const p2pAccountIds = (items, accounts) => {
+  const itemIds = new Set(items.filter((i) => P2P.test(i.institution_name ?? "")).map((i) => i.id));
+  return new Set(accounts.filter((a) => itemIds.has(a.item_id) || P2P.test(a.name)).map((a) => a.id));
+};
 
 export function rewardCategory(t) {
   const m = `${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase();
@@ -106,14 +116,14 @@ function rawRate(program, cat, iso) {
 }
 
 // Applies caps in date order; returns per-transaction earnings and cap usage
-export function computeRewards(transactions, accounts, sinceIso) {
+export function computeRewards(transactions, accounts, sinceIso, skipAccounts = new Set()) {
   const programs = new Map(accounts.map((a) => [a.id, programFor(a)]));
   const usage = new Map(); // `${accountId}|${capIdx}|${periodKey}` -> spend
   const rows = [];
   const txs = transactions.filter((t) => t.date >= sinceIso && isPurchase(t)).sort((a, b) => a.date.localeCompare(b.date));
   for (const t of txs) {
     const account = accounts.find((a) => a.id === t.account_id);
-    if (!account || (account.type !== "credit" && account.type !== "depository")) continue;
+    if (!account || (account.type !== "credit" && account.type !== "depository") || skipAccounts.has(account.id)) continue;
     const program = programs.get(t.account_id);
     const cat = rewardCategory(t);
     let rate = rawRate(program, cat, t.date);
