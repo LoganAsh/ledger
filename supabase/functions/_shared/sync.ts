@@ -160,6 +160,10 @@ export async function syncItem(item: Item) {
   try {
     const token = await getToken(item.id);
     const { accountMap, hasDebt } = await upsertAccounts(item, token);
+    // Joint accounts already linked through another login at this bank: skip their copies
+    await admin.rpc("mark_duplicate_accounts", { p_user: item.user_id });
+    const { data: dups } = await admin.from("accounts").select("plaid_account_id").eq("item_id", item.id).not("duplicate_of", "is", null);
+    for (const d of dups ?? []) accountMap.delete(d.plaid_account_id);
     const counts = await syncTransactions(item, token, accountMap);
     const liabilities = await syncLiabilities(item, token, accountMap, hasDebt);
     await admin

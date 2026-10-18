@@ -12,7 +12,7 @@ const GROUPS = [
 ];
 
 export default function Accounts({ ledger, plaid, go }) {
-  const { accounts, items, updateAccount, sync, syncing } = ledger;
+  const { accounts, items, mergedAccounts, updateAccount, sync, syncing } = ledger;
   const [editing, setEditing] = useState(null);
   const known = GROUPS.map((g) => g.type);
   const groups = [...GROUPS, { type: "other", title: "Other" }]
@@ -74,6 +74,11 @@ export default function Accounts({ ledger, plaid, go }) {
                   <span className={`tx-sub ${i.status !== "active" ? "neg" : ""}`}>
                     {" "}{i.status === "active" ? `Updated ${timeAgo(i.last_synced_at)}` : i.status === "login_required" ? "Sign-in needed" : "Last update failed"}
                   </span>
+                  {mergedAccounts.some((m) => m.item_id === i.id) && (
+                    <span className="tx-sub block-sub">
+                      {mergedAccounts.filter((m) => m.item_id === i.id).length} shared account{mergedAccounts.filter((m) => m.item_id === i.id).length > 1 ? "s" : ""} already linked, shown once
+                    </span>
+                  )}
                 </span>
                 {i.status !== "active" ? (
                   <button className="btn-quiet" onClick={() => plaid.start(i.id)} disabled={plaid.busy}>Sign in</button>

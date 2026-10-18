@@ -5,7 +5,7 @@ const HISTORY_MONTHS = 15;
 
 export function useLedger(session) {
   const [state, setState] = useState({
-    loading: true, error: null, accounts: [], items: [], transactions: [], snapshots: [], budgets: [], bills: [], hiddenRecurring: [], liabilities: [], assets: [],
+    loading: true, error: null, accounts: [], items: [], transactions: [], snapshots: [], budgets: [], bills: [], hiddenRecurring: [], liabilities: [], assets: [], mergedAccounts: [],
   });
   const [syncing, setSyncing] = useState(false);
 
@@ -28,7 +28,16 @@ export function useLedger(session) {
         supabase.from("liabilities").select("*").then(rows),
         supabase.from("assets").select("*").order("created_at").then(rows),
       ]);
-      setState({ loading: false, error: null, accounts, items, transactions, snapshots, budgets, bills, hiddenRecurring: hidden, liabilities, assets });
+      // Joint accounts seen through a second login are merged into the first copy
+      const dupIds = new Set(accounts.filter((a) => a.duplicate_of).map((a) => a.id));
+      const keep = (r) => !dupIds.has(r.account_id);
+      setState({
+        loading: false, error: null,
+        accounts: accounts.filter((a) => !a.duplicate_of),
+        mergedAccounts: accounts.filter((a) => a.duplicate_of),
+        items, transactions: transactions.filter(keep), snapshots: snapshots.filter(keep), budgets, bills,
+        hiddenRecurring: hidden, liabilities: liabilities.filter(keep), assets,
+      });
     } catch (e) {
       setState((s) => ({ ...s, loading: false, error: e.message }));
     }

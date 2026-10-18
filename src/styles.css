@@ -369,3 +369,5 @@ a.chip { text-decoration: none; color: var(--green); }
 .best-rate { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
 .best-num { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1; color: var(--green); }
 .best-unit { font-size: 0.7rem; font-weight: 600; color: var(--muted); margin-top: 3px; }
+
+.block-sub { display: block; }
