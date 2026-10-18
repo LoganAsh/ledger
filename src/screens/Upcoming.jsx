@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import Sheet from "../components/Sheet";
 import { categoryName, dateLabel, money, moneyWhole, monthLabel } from "../lib/format";
-import { shiftMonth } from "../lib/finance";
+import { isCashAccount, shiftMonth } from "../lib/finance";
 import { FREQUENCIES, NTH_OPTIONS, WEEKDAY_NAMES, addDays, buildSchedule, describeSchedule, fromIso, todayIso } from "../lib/upcoming";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const SOURCE_LABEL = { bill: "Bill", income: "Expected income", recurring: "Estimated", card: "Card due", loan: "Loan payment" };
-const label = (e) => (e.source === "bill" && e.direction === "in" ? "Income" : SOURCE_LABEL[e.source]);
+const label = (e) => (e.source === "bill" && e.direction === "in" ? "Income" : e.direction === "transfer" ? "Transfer" : SOURCE_LABEL[e.source]);
 
 export default function Upcoming({ ledger, plaid, go }) {
   const { accounts, items, hiddenRecurring, unhideRecurring } = ledger;
@@ -33,7 +33,9 @@ export default function Upcoming({ ledger, plaid, go }) {
   const next30 = schedule.filter((e) => e.date >= today && e.date <= horizon && !e.paid);
   const due30 = next30.filter((e) => e.direction === "out").reduce((s, e) => s + e.amount, 0);
   const income30 = next30.filter((e) => e.direction === "in").reduce((s, e) => s + e.amount, 0);
-  const cash = accounts.filter((a) => a.type === "depository" && !a.is_hidden).reduce((s, a) => s + Number(a.available_balance ?? a.current_balance ?? 0), 0);
+  const transfers30 = next30.filter((e) => e.direction === "transfer").reduce((s, e) => s + e.amount, 0);
+  const cash = accounts.filter((a) => isCashAccount(a) && !a.is_hidden).reduce((s, a) => s + Number(a.available_balance ?? a.current_balance ?? 0), 0);
+  const projected = cash + income30 - due30 - transfers30;
   const consentItems = items.filter((i) => i.liabilities_status === "consent_required");
 
   // Calendar grid
@@ -58,10 +60,11 @@ export default function Upcoming({ ledger, plaid, go }) {
           <p className="figure-lg">{money(due30)}</p>
         </div>
         <dl className="cover-rows">
-          <div><dt>Cash in checking & savings</dt><dd>{money(cash)}</dd></div>
+          <div><dt>Cash in checking</dt><dd>{money(cash)}</dd></div>
           <div><dt>Expected income</dt><dd className="pos">+{money(income30)}</dd></div>
           <div><dt>Payments due</dt><dd className="neg">−{money(due30)}</dd></div>
-          <div className="cover-total"><dt>Projected in 30 days</dt><dd className={cash + income30 - due30 < 0 ? "neg" : ""}>{money(cash + income30 - due30)}</dd></div>
+          {transfers30 > 0 && <div><dt>Transfers to savings</dt><dd className="xfer">−{money(transfers30)}</dd></div>}
+          <div className="cover-total"><dt>Checking in 30 days</dt><dd className={projected < 0 ? "neg" : ""}>{money(projected)}</dd></div>
         </dl>
       </section>
 
@@ -86,6 +89,7 @@ export default function Upcoming({ ledger, plaid, go }) {
             const live = entries.filter((e) => !e.paid);
             const outTotal = live.filter((e) => e.direction === "out").reduce((s, e) => s + e.amount, 0);
             const inTotal = live.filter((e) => e.direction === "in").reduce((s, e) => s + e.amount, 0);
+            const xferTotal = live.filter((e) => e.direction === "transfer").reduce((s, e) => s + e.amount, 0);
             const short = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
             const cls = ["cal-day", iso === today && "today", iso < today && "past", iso === selected && "selected", entries.length && "has"].filter(Boolean).join(" ");
             return (
@@ -93,12 +97,13 @@ export default function Upcoming({ ledger, plaid, go }) {
                 key={iso}
                 className={cls}
                 onClick={() => setSelected(iso === selected ? null : iso)}
-                aria-label={`${dateLabel(iso)}${inTotal ? `, ${money(inTotal)} coming in` : ""}${outTotal ? `, ${money(outTotal)} going out` : ""}`}
+                aria-label={`${dateLabel(iso)}${inTotal ? `, ${money(inTotal)} coming in` : ""}${outTotal ? `, ${money(outTotal)} going out` : ""}${xferTotal ? `, ${money(xferTotal)} to savings` : ""}`}
                 aria-pressed={iso === selected}
               >
                 <span className="cal-num">{Number(iso.slice(8))}</span>
                 {inTotal > 0 && <span className="cal-amt in">{short(inTotal)}</span>}
                 {outTotal > 0 && <span className="cal-amt out">{short(outTotal)}</span>}
+                {xferTotal > 0 && <span className="cal-amt xfer">{short(xferTotal)}</span>}
               </button>
             );
           })}
@@ -125,13 +130,15 @@ export default function Upcoming({ ledger, plaid, go }) {
                   <div className="tx-main">
                     <span className="tx-name">{e.name}</span>
                     <span className="tx-sub">
-                      <span className={`tag tag-${e.direction === "in" ? "in" : e.source}`}>{label(e)}</span>
+                      <span className={`tag tag-${e.direction === "in" ? "in" : e.direction === "transfer" ? "xfer" : e.source}`}>{label(e)}</span>
                       {e.paid ? " Paid" : e.overdue ? " Overdue" : ""}
-                      {e.autopay ? (e.direction === "in" ? " Direct deposit" : " Autopay") : ""}
-                      {e.account ? ` ${e.account}` : ""}
+                      {e.autopay ? (e.direction === "in" ? " Direct deposit" : e.direction === "transfer" ? " Automatic" : " Autopay") : ""}
+                      {e.direction === "transfer"
+                        ? ` ${e.account ?? "Checking"} → ${e.toAccount ?? "Savings"}`
+                        : e.account ? ` ${e.account}` : ""}
                     </span>
                   </div>
-                  <span className={`tx-amt ${e.direction === "in" ? "pos" : e.overdue ? "neg" : ""}`}>
+                  <span className={`tx-amt ${e.direction === "in" ? "pos" : e.direction === "transfer" ? "xfer" : e.overdue ? "neg" : ""}`}>
                     {e.estimated ? "≈" : ""}{e.direction === "in" ? "+" : ""}{money(e.amount)}
                   </span>
                 </button>
@@ -179,6 +186,7 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
   const { accounts, saveBill, deleteBill, hideRecurring } = ledger;
   const init = bill ?? prefill ?? {};
   const [kind, setKind] = useState(init.kind ?? "expense");
+  const [toAccountId, setToAccountId] = useState(init.to_account_id ?? "");
   const [name, setName] = useState(init.name ?? "");
   const [amount, setAmount] = useState(init.amount != null ? String(init.amount) : "");
   const [frequency, setFrequency] = useState(init.frequency ?? "monthly");
@@ -194,7 +202,7 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
 
   async function save() {
     const n = Number(amount.replace(/[$,]/g, ""));
-    if (!name.trim()) return setError(`Give the ${kind === "income" ? "income" : "bill"} a name.`);
+    if (!name.trim()) return setError(`Give the ${kind === "expense" ? "bill" : kind} a name.`);
     if (!Number.isFinite(n) || n < 0) return setError("Enter a valid amount.");
     if (frequency === "monthly_nth" && !nthWeeks.length) return setError("Pick at least one week of the month.");
     setBusy(true);
@@ -205,7 +213,8 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
         kind, name: name.trim(), amount: n, frequency, next_due: nextDue,
         weekday: frequency === "monthly_nth" ? Number(weekday) : null,
         nth_weeks: frequency === "monthly_nth" ? nthWeeks : null,
-        account_id: accountId || null, autopay, notes: notes.trim() || null,
+        account_id: accountId || null, to_account_id: kind === "transfer" ? toAccountId || null : null,
+        autopay, notes: notes.trim() || null,
       });
       // Replacing an estimate: hide the auto-detected version so it isn't counted twice
       if (prefill?.fromRecurring) await hideRecurring(prefill.fromRecurring);
@@ -223,12 +232,13 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
   }
 
   return (
-    <Sheet title={bill ? (kind === "income" ? "Edit income" : "Edit bill") : "Add to calendar"} onClose={onClose}>
-      <div className="seg" role="radiogroup" aria-label="Type">
+    <Sheet title={bill ? { income: "Edit income", transfer: "Edit transfer", expense: "Edit bill" }[kind] : "Add to calendar"} onClose={onClose}>
+      <div className="seg three" role="radiogroup" aria-label="Type">
         <button role="radio" aria-checked={kind === "expense"} className={kind === "expense" ? "on out" : ""} onClick={() => setKind("expense")}>Payment</button>
         <button role="radio" aria-checked={kind === "income"} className={kind === "income" ? "on in" : ""} onClick={() => setKind("income")}>Income</button>
+        <button role="radio" aria-checked={kind === "transfer"} className={kind === "transfer" ? "on xfer" : ""} onClick={() => setKind("transfer")}>Transfer</button>
       </div>
-      <label className="field">Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === "income" ? "Paycheck, client payment, rental income…" : "Rent, truck payment, insurance…"} /></label>
+      <label className="field">Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder={{ income: "Paycheck, client payment, rental income…", transfer: "Transfer to savings", expense: "Rent, truck payment, insurance…" }[kind]} /></label>
       <div className="field-row">
         <label className="field">Amount<input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" /></label>
         <label className="field">How often
@@ -252,17 +262,25 @@ function BillSheet({ ledger, bill, prefill, onClose }) {
         </div>
       )}
       <label className="field">{frequency === "once" ? "Due date" : frequency === "monthly_nth" ? "Starting" : "Next due date"}<input type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} /></label>
-      <label className="field">{kind === "income" ? "Deposited to" : "Paid from"}
+      <label className="field">{{ income: "Deposited to", transfer: "From", expense: "Paid from" }[kind]}
         <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
           <option value="">Not specified</option>
           {accounts.filter((a) => !a.is_hidden).map((a) => <option key={a.id} value={a.id}>{a.nickname || a.name}{a.mask ? ` ••${a.mask}` : ""}</option>)}
         </select>
       </label>
-      <label className="toggle"><input type="checkbox" checked={autopay} onChange={(e) => setAutopay(e.target.checked)} /><span>{kind === "income" ? "Direct deposit" : "Paid automatically"}</span></label>
+      {kind === "transfer" && (
+        <label className="field">To
+          <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
+            <option value="">Not specified</option>
+            {accounts.filter((a) => !a.is_hidden && a.id !== accountId).map((a) => <option key={a.id} value={a.id}>{a.nickname || a.name}{a.mask ? ` ••${a.mask}` : ""}</option>)}
+          </select>
+        </label>
+      )}
+      <label className="toggle"><input type="checkbox" checked={autopay} onChange={(e) => setAutopay(e.target.checked)} /><span>{{ income: "Direct deposit", transfer: "Automatic transfer", expense: "Paid automatically" }[kind]}</span></label>
       <label className="field">Note<textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Account number, website, anything useful" /></label>
       {prefill?.fromRecurring && <p className="meta">Saving this hides the estimated version so it isn’t counted twice.</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
-      <button className="btn-primary" onClick={save} disabled={busy}>{busy ? "Saving…" : bill ? "Save changes" : kind === "income" ? "Add income" : "Add bill"}</button>
+      <button className="btn-primary" onClick={save} disabled={busy}>{busy ? "Saving…" : bill ? "Save changes" : { income: "Add income", transfer: "Add transfer", expense: "Add bill" }[kind]}</button>
       {bill && <button className="btn-text danger" onClick={remove} disabled={busy}>Delete</button>}
     </Sheet>
   );

@@ -87,7 +87,8 @@ export function buildSchedule({ bills, transactions, liabilities, accounts, hidd
     for (const date of billDates(b, start, end)) {
       out.push({
         key: `bill-${b.id}-${date}`, date, name: b.name, amount: Number(b.amount), source: "bill",
-        direction: b.kind === "income" ? "in" : "out",
+        direction: b.kind === "income" ? "in" : b.kind === "transfer" ? "transfer" : "out",
+        toAccount: accountName.get(b.to_account_id),
         autopay: b.autopay, account: accountName.get(b.account_id), bill: b,
       });
     }

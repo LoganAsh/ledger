@@ -4,6 +4,7 @@
   --out: #B5443F;
   --today: #DDEBF8;
   --today-ink: #2D5F8A;
+  --xfer: #7B4FB8;
   --paper: #EEF2EC;
   --surface: #F8FAF7;
   --ink: #1A2620;
@@ -38,6 +39,7 @@
     --out: #E07068;
     --today: #1D3347;
     --today-ink: #9CC6EC;
+    --xfer: #B293E8;
   }
 }
 
@@ -329,3 +331,8 @@ h1, h2 { margin: 0; }
 .value-box .meta { margin: 0; }
 a.chip { text-decoration: none; color: var(--green); }
 .warn-text { color: var(--amber); }
+
+.cal-amt.xfer { background: var(--xfer); }
+.xfer, .tag-xfer { color: var(--xfer); }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg button.on.xfer { background: var(--xfer); color: #fff; }
