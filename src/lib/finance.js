@@ -15,21 +15,28 @@ export function shiftMonth(key, delta) {
 export const isSpending = (t) => !t.is_excluded && t.amount > 0 && !NON_SPENDING.includes(txCategory(t));
 export const isIncome = (t) => !t.is_excluded && t.amount < 0 && txCategory(t) === "INCOME";
 
+// Everyday spending accounts; other depository subtypes (savings, money market, CD, HSA) count as savings
+const CASH_SUBTYPES = ["checking", "paypal", "prepaid", "cash management", "ebt"];
+
 // Vehicles and other property the user values by hand
 export const realAssetTotal = (realAssets = []) => realAssets.filter((a) => !a.is_hidden).reduce((s, a) => s + Number(a.value ?? 0), 0);
 
 export function balanceSummary(accounts, realAssets = []) {
-  let assets = 0, debts = 0, creditUsed = 0, creditLimit = 0;
+  let assets = 0, cash = 0, savings = 0, debts = 0, creditUsed = 0, creditLimit = 0;
   for (const a of accounts) {
     if (a.is_hidden) continue;
     const bal = Number(a.current_balance ?? 0);
     if (DEBT_TYPES.includes(a.type)) {
       debts += bal;
       if (a.type === "credit" && a.credit_limit) { creditUsed += bal; creditLimit += Number(a.credit_limit); }
-    } else assets += bal;
+    } else {
+      assets += bal;
+      if (a.type === "depository" && CASH_SUBTYPES.includes(a.subtype ?? "checking")) cash += bal;
+      else savings += bal;
+    }
   }
   const property = realAssetTotal(realAssets);
-  return { assets, property, debts, netWorth: assets + property - debts, utilization: creditLimit ? creditUsed / creditLimit : null, creditUsed, creditLimit };
+  return { assets, cash, savings, property, debts, netWorth: assets + property - debts, utilization: creditLimit ? creditUsed / creditLimit : null, creditUsed, creditLimit };
 }
 
 // Account history plus today's value of vehicles and property (their past values aren't tracked)

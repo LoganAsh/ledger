@@ -55,7 +55,8 @@ export default function Overview({ ledger, plaid, go }) {
         <p className="strip-label">Net worth</p>
         <p className={`strip-figure ${bal.netWorth < 0 ? "neg" : ""}`}>{moneyWhole(bal.netWorth)}</p>
         <dl className="strip-rows">
-          <div><dt>Cash & investments</dt><dd>{money(bal.assets)}</dd></div>
+          <div><dt>Cash</dt><dd>{money(bal.cash)}</dd></div>
+          <div><dt>Savings & investments</dt><dd>{money(bal.savings)}</dd></div>
           {bal.property > 0 && <div><dt>Vehicles & property</dt><dd>{money(bal.property)}</dd></div>}
           <div><dt>Cards & loans</dt><dd className="neg">−{money(bal.debts)}</dd></div>
         </dl>
