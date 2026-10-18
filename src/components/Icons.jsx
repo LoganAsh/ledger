@@ -5,3 +5,4 @@ export const ActivityIcon = () => (<svg {...base}><path d="M4 6h16M4 12h16M4 18h
 export const SpendingIcon = () => (<svg {...base}><circle cx="12" cy="12" r="8" /><path d="M12 4v8l6 4" /></svg>);
 export const AccountsIcon = () => (<svg {...base}><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h4" /></svg>);
 export const UpcomingIcon = () => (<svg {...base}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4M8 15h3" /></svg>);
+export const RewardsIcon = () => (<svg {...base}><path d="M12 3l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.3 6.8 19l1-5.8L3.6 9.1l5.8-.8z" /></svg>);

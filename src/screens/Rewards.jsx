@@ -3,6 +3,12 @@ import { dateLabel, money, moneyWhole } from "../lib/format";
 import { REWARD_CATEGORIES, bestCards, computeRewards, discoverQuarters, programFor, quarterOf } from "../lib/rewards";
 
 const pct = (r) => `${parseFloat(r.toFixed(2))}%`;
+const rateDisplay = (program, rate) => {
+  const n = parseFloat(rate.toFixed(2));
+  if (program?.currency === "miles") return { num: `${n}x`, unit: "miles" };
+  if (program?.currency === "points") return { num: `${n}x`, unit: "points" };
+  return { num: `${n}%`, unit: "cash back" };
+};
 const cardLabel = (a) => `${a.nickname || programFor(a)?.name || a.name}${a.mask ? ` ••${a.mask}` : ""}`;
 
 const CAP = 1500;
@@ -103,17 +109,36 @@ export default function Rewards({ ledger, go }) {
   const hasDiscover = data.cards.some((a) => programFor(a)?.id === "discover");
   const unknownCards = data.cards.filter((a) => !programFor(a));
   const catsBySpend = Object.keys(REWARD_CATEGORIES)
-    .filter((c) => data.best[c] && (data.byCat.get(c) || ["dining", "grocery", "gas", "travel", "streaming"].includes(c)))
-    .sort((a, b) => (data.byCat.get(b) ?? 0) - (data.byCat.get(a) ?? 0));
+    .filter((c) => data.best[c] && c !== "other")
+    .sort((a, b) => (data.byCat.get(b) ?? 0) - (data.byCat.get(a) ?? 0))
+    .concat(data.best.other ? ["other"] : []);
 
   return (
     <>
       <header className="page-head">
-        <div>
-          <button className="btn-text back" onClick={() => go("accounts")}>‹ Accounts</button>
-          <h1 className="page-title">Card rewards</h1>
-        </div>
+        <h1 className="page-title">Card rewards</h1>
       </header>
+
+      <section className="best-list" aria-label="Best card for each category">
+        <ul>
+          {catsBySpend.map((c) => {
+            const b = data.best[c];
+            const r = rateDisplay(b.program, b.rate);
+            return (
+              <li key={c} className="best-row">
+                <div className="best-text">
+                  <span className="best-cat">{REWARD_CATEGORIES[c]}</span>
+                  <span className="best-card">{cardLabel(b.account)}{b.capNote ? ` · ${b.capNote}` : ""}</span>
+                </div>
+                <div className="best-rate">
+                  <span className="best-num">{r.num}</span>
+                  <span className="best-unit">{r.unit}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       <section className="cover">
         <p className="strip-label">Estimated rewards earned in {today.slice(0, 4)}</p>
@@ -128,25 +153,6 @@ export default function Rewards({ ledger, go }) {
           <span>Discover’s 5% categories only count once you activate them each quarter, through the Discover app or website.</span>
         </div>
       )}
-
-      <section className="block">
-        <div className="block-head static"><h2>Which card to use</h2></div>
-        <ul className="plain-list">
-          {catsBySpend.map((c) => {
-            const b = data.best[c];
-            const monthly = (data.byCat.get(c) ?? 0) / data.monthsElapsed;
-            return (
-              <li key={c}>
-                <span>
-                  {REWARD_CATEGORIES[c]}
-                  <span className="tx-sub"> {cardLabel(b.account)}{b.capNote ? `, ${b.capNote}` : ""}{monthly >= 1 ? ` · you spend ~${moneyWhole(monthly)}/mo` : ""}</span>
-                </span>
-                <span className="num pos">{pct(b.rate)}</span>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
 
       <section className="block">
         <div className="block-head static"><h2>By card this year</h2></div>
