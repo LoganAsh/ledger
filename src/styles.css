@@ -322,3 +322,10 @@ h1, h2 { margin: 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
 .chip { background: var(--surface); border: 1px solid var(--rule); border-radius: 99px; padding: 6px 12px; font-weight: 700; font-size: 0.85rem; color: var(--muted); }
 .chip.on { background: var(--green); border-color: var(--green); color: var(--paper); }
+
+.inline-input { display: flex; gap: 8px; }
+.inline-input input { flex: 1; min-width: 0; font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.04em; }
+.value-box { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.value-box .meta { margin: 0; }
+a.chip { text-decoration: none; color: var(--green); }
+.warn-text { color: var(--amber); }

@@ -15,7 +15,10 @@ export function shiftMonth(key, delta) {
 export const isSpending = (t) => !t.is_excluded && t.amount > 0 && !NON_SPENDING.includes(txCategory(t));
 export const isIncome = (t) => !t.is_excluded && t.amount < 0 && txCategory(t) === "INCOME";
 
-export function balanceSummary(accounts) {
+// Vehicles and other property the user values by hand
+export const realAssetTotal = (realAssets = []) => realAssets.filter((a) => !a.is_hidden).reduce((s, a) => s + Number(a.value ?? 0), 0);
+
+export function balanceSummary(accounts, realAssets = []) {
   let assets = 0, debts = 0, creditUsed = 0, creditLimit = 0;
   for (const a of accounts) {
     if (a.is_hidden) continue;
@@ -25,10 +28,13 @@ export function balanceSummary(accounts) {
       if (a.type === "credit" && a.credit_limit) { creditUsed += bal; creditLimit += Number(a.credit_limit); }
     } else assets += bal;
   }
-  return { assets, debts, netWorth: assets - debts, utilization: creditLimit ? creditUsed / creditLimit : null, creditUsed, creditLimit };
+  const property = realAssetTotal(realAssets);
+  return { assets, property, debts, netWorth: assets + property - debts, utilization: creditLimit ? creditUsed / creditLimit : null, creditUsed, creditLimit };
 }
 
-export function netWorthHistory(snapshots, accounts) {
+// Account history plus today's value of vehicles and property (their past values aren't tracked)
+export function netWorthHistory(snapshots, accounts, realAssets = []) {
+  const property = realAssetTotal(realAssets);
   const typeById = new Map(accounts.filter((a) => !a.is_hidden).map((a) => [a.id, a.type]));
   const byDate = new Map();
   for (const s of snapshots) {
@@ -37,7 +43,7 @@ export function netWorthHistory(snapshots, accounts) {
     const sign = DEBT_TYPES.includes(type) ? -1 : 1;
     byDate.set(s.snapshot_date, (byDate.get(s.snapshot_date) ?? 0) + sign * Number(s.current_balance ?? 0));
   }
-  return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value }));
+  return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value: value + property }));
 }
 
 export function monthTotals(transactions, key) {

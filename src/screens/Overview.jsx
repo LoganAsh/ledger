@@ -4,7 +4,7 @@ import { addDays, buildSchedule, todayIso } from "../lib/upcoming";
 import { balanceSummary, cumulativeByDay, currentMonthKey, monthTotals, netWorthHistory, shiftMonth, txCategory } from "../lib/finance";
 
 export default function Overview({ ledger, plaid, go }) {
-  const { accounts, items, transactions, snapshots, syncing, sync } = ledger;
+  const { accounts, items, transactions, snapshots, assets, syncing, sync } = ledger;
   const lastSynced = items.map((i) => i.last_synced_at).filter(Boolean).sort().at(-1);
   const needsLogin = items.filter((i) => i.status === "login_required" || i.status === "error");
 
@@ -20,8 +20,8 @@ export default function Overview({ ledger, plaid, go }) {
     );
   }
 
-  const bal = balanceSummary(accounts);
-  const history = netWorthHistory(snapshots, accounts);
+  const bal = balanceSummary(accounts, assets);
+  const history = netWorthHistory(snapshots, accounts, assets);
   const month = currentMonthKey();
   const now = monthTotals(transactions, month);
   const today = new Date().getDate();
@@ -56,6 +56,7 @@ export default function Overview({ ledger, plaid, go }) {
         <p className={`strip-figure ${bal.netWorth < 0 ? "neg" : ""}`}>{moneyWhole(bal.netWorth)}</p>
         <dl className="strip-rows">
           <div><dt>Cash & investments</dt><dd>{money(bal.assets)}</dd></div>
+          {bal.property > 0 && <div><dt>Vehicles & property</dt><dd>{money(bal.property)}</dd></div>}
           <div><dt>Cards & loans</dt><dd className="neg">−{money(bal.debts)}</dd></div>
         </dl>
         {history.length >= 2 ? (

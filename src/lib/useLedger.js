@@ -5,7 +5,7 @@ const HISTORY_MONTHS = 15;
 
 export function useLedger(session) {
   const [state, setState] = useState({
-    loading: true, error: null, accounts: [], items: [], transactions: [], snapshots: [], budgets: [], bills: [], hiddenRecurring: [], liabilities: [],
+    loading: true, error: null, accounts: [], items: [], transactions: [], snapshots: [], budgets: [], bills: [], hiddenRecurring: [], liabilities: [], assets: [],
   });
   const [syncing, setSyncing] = useState(false);
 
@@ -17,7 +17,7 @@ export function useLedger(session) {
       const sinceIso = since.toISOString().slice(0, 10);
 
       const rows = (r) => { if (r.error) throw r.error; return r.data; };
-      const [accounts, items, budgets, transactions, snapshots, bills, hidden, liabilities] = await Promise.all([
+      const [accounts, items, budgets, transactions, snapshots, bills, hidden, liabilities, assets] = await Promise.all([
         supabase.from("accounts").select("*").order("type").order("name").then((r) => { if (r.error) throw r.error; return r.data; }),
         supabase.from("plaid_items").select("id, institution_name, status, liabilities_status, last_error, last_synced_at, created_at").order("created_at").then((r) => { if (r.error) throw r.error; return r.data; }),
         supabase.from("budgets").select("*").order("category").then((r) => { if (r.error) throw r.error; return r.data; }),
@@ -26,8 +26,9 @@ export function useLedger(session) {
         supabase.from("bills").select("*").order("next_due").then(rows),
         supabase.from("recurring_hidden").select("id, merchant").then(rows),
         supabase.from("liabilities").select("*").then(rows),
+        supabase.from("assets").select("*").order("created_at").then(rows),
       ]);
-      setState({ loading: false, error: null, accounts, items, transactions, snapshots, budgets, bills, hiddenRecurring: hidden, liabilities });
+      setState({ loading: false, error: null, accounts, items, transactions, snapshots, budgets, bills, hiddenRecurring: hidden, liabilities, assets });
     } catch (e) {
       setState((s) => ({ ...s, loading: false, error: e.message }));
     }
@@ -106,8 +107,24 @@ export function useLedger(session) {
     setState((s) => ({ ...s, hiddenRecurring: s.hiddenRecurring.filter((h) => h.id !== id) }));
   }, []);
 
+  const saveAsset = useCallback(async (asset) => {
+    const { id, ...fields } = asset;
+    const query = id
+      ? supabase.from("assets").update(fields).eq("id", id)
+      : supabase.from("assets").insert({ ...fields, user_id: session.user.id });
+    const { data, error } = await query.select().single();
+    if (error) throw error;
+    setState((s) => ({ ...s, assets: [...s.assets.filter((a) => a.id !== data.id), data] }));
+  }, [session]);
+
+  const deleteAsset = useCallback(async (id) => {
+    const { error } = await supabase.from("assets").delete().eq("id", id);
+    if (error) throw error;
+    setState((s) => ({ ...s, assets: s.assets.filter((a) => a.id !== id) }));
+  }, []);
+
   return {
-    ...state, syncing, reload: load, sync, updateTransaction, updateAccount, saveBudget, deleteBudget,
+    ...state, syncing, saveAsset, deleteAsset, reload: load, sync, updateTransaction, updateAccount, saveBudget, deleteBudget,
     saveBill, deleteBill, hideRecurring, unhideRecurring,
   };
 }

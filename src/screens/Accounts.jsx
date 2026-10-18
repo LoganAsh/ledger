@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Sheet from "../components/Sheet";
+import Vehicles from "../components/Vehicles";
 import { money, moneyWhole, timeAgo } from "../lib/format";
 import { supabase } from "../lib/supabase";
 
@@ -56,6 +57,8 @@ export default function Accounts({ ledger, plaid }) {
           </section>
         );
       })}
+
+      <Vehicles ledger={ledger} />
 
       {items.length > 0 && (
         <section className="block">
