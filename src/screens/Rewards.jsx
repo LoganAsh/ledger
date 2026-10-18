@@ -1,9 +1,64 @@
 import { useMemo, useState } from "react";
 import { dateLabel, money, moneyWhole } from "../lib/format";
-import { REWARD_CATEGORIES, bestCards, computeRewards, programFor } from "../lib/rewards";
+import { REWARD_CATEGORIES, bestCards, computeRewards, discoverQuarters, programFor, quarterOf } from "../lib/rewards";
 
 const pct = (r) => `${parseFloat(r.toFixed(2))}%`;
 const cardLabel = (a) => `${a.nickname || programFor(a)?.name || a.name}${a.mask ? ` ••${a.mask}` : ""}`;
+
+const CAP = 1500;
+
+function DiscoverQuarters({ quarters, today }) {
+  const current = quarterOf(today);
+  const total = quarters.reduce((s, q) => s + q.bonusEarned + q.otherEarned, 0);
+  const qEnd = (key) => {
+    const [y, q] = key.split("-Q").map(Number);
+    return new Date(y, q * 3, 0);
+  };
+  return (
+    <section className="block">
+      <div className="block-head static">
+        <h2>Discover it by quarter</h2>
+        <span className="figure-sm pos">{money(total)}</span>
+      </div>
+      <ul className="quarter-list">
+        {quarters.map((q) => {
+          const isNow = q.key === current;
+          const future = q.key > current;
+          const empty = !future && !isNow && q.bonusSpend + q.otherSpend === 0;
+          const used = Math.min(q.bonusSpend, CAP);
+          const daysLeft = Math.ceil((qEnd(q.key) - new Date()) / 86400000);
+          return (
+            <li key={q.key} className={`quarter ${isNow ? "now" : ""} ${future ? "future" : ""}`}>
+              <div className="q-top">
+                <span className="q-name">{q.label}{isNow ? " · now" : ""}</span>
+                <span className="num pos">{future || empty ? "—" : money(q.bonusEarned + q.otherEarned)}</span>
+              </div>
+              <p className="q-cats">5%: {q.categories}</p>
+              {empty && <p className="q-detail">No purchases on this card this quarter.</p>}
+              {!future && !empty && (
+                <>
+                  <div className="meter" role="meter" aria-valuemin={0} aria-valuemax={CAP} aria-valuenow={Math.round(used)} aria-label="5% spending used">
+                    <span style={{ width: `${(used / CAP) * 100}%` }} />
+                  </div>
+                  <p className="q-detail">
+                    {money(q.bonusSpend)} of {moneyWhole(CAP)} at 5% ({money(q.bonusEarned)})
+                    {q.otherSpend > 0 ? ` · ${money(q.otherSpend)} at 1% (${money(q.otherEarned)})` : ""}
+                  </p>
+                  {isNow && (
+                    <p className="q-detail">
+                      {q.bonusSpend >= CAP ? "5% cap reached for this quarter." : `${moneyWhole(CAP - q.bonusSpend)} left at 5%, ${daysLeft} days to go.`}
+                    </p>
+                  )}
+                </>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="meta">Assumes you activated each quarter. Purchases before you activate earn 1%, which isn’t reflected here.</p>
+    </section>
+  );
+}
 
 export default function Rewards({ ledger, go }) {
   const { transactions, accounts } = ledger;
@@ -39,7 +94,9 @@ export default function Rewards({ ledger, go }) {
       }
     }
     const monthsElapsed = Math.max(1, Number(today.slice(5, 7)) - 1 + Number(today.slice(8, 10)) / 31);
-    return { earned, missed, best, byCard, byCat, misses: misses.sort((a, b) => b.gap - a.gap).slice(0, 6), monthsElapsed, cards };
+    const discoverIds = cards.filter((a) => programFor(a)?.id === "discover").map((a) => a.id);
+    const quarters = discoverIds.length ? discoverQuarters(rows, discoverIds, today.slice(0, 4)) : [];
+    return { earned, missed, best, byCard, byCat, misses: misses.sort((a, b) => b.gap - a.gap).slice(0, 6), monthsElapsed, cards, quarters };
   }, [transactions, accounts, yearStart, today]);
 
   const debit = data.byCard.get("debit");
@@ -68,7 +125,7 @@ export default function Rewards({ ledger, go }) {
 
       {hasDiscover && (
         <div className="attention">
-          <span>Discover’s 5% categories this quarter are restaurants, entertainment and utilities. They only count if you activate them with Discover.</span>
+          <span>Discover’s 5% categories only count once you activate them each quarter, through the Discover app or website.</span>
         </div>
       )}
 
@@ -133,6 +190,8 @@ export default function Rewards({ ledger, go }) {
           )}
         </ul>
       </section>
+
+      {data.quarters.length > 0 && <DiscoverQuarters quarters={data.quarters} today={today} />}
 
       {data.misses.length > 0 && (
         <section className="block">

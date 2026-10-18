@@ -9,6 +9,7 @@ export const REWARD_CATEGORIES = {
   gas: "Gas",
   costco_gas: "Costco gas",
   costco: "Costco",
+  wholesale: "Wholesale clubs",
   travel: "Travel",
   streaming: "Streaming",
   entertainment: "Entertainment",
@@ -29,6 +30,9 @@ export function rewardCategory(t) {
   const p = t.category_primary ?? "";
   if (/microsoft|xbox/.test(m)) return "microsoft";
   if (/costco/.test(m)) return /gas|fuel/.test(m) || d === "TRANSPORTATION_GAS" ? "costco_gas" : "costco";
+  // Warehouse-club fuel stations (e.g. "SAMS FUEL") are coded as gas stations by card issuers
+  if (/\bfuel\b/.test(m)) return "gas";
+  if (/sam'?s club|bj'?s wholesale|\bbjs\b/.test(m)) return "wholesale";
   if (/doordash|grubhub|uber ?eats|postmates/.test(m)) return "delivery";
   if (/netflix|disney|hulu|spotify|\bmax\b|hbo|peacock|paramount|youtube ?tv|apple ?tv|prime video|sling|fubo/.test(m)) return "streaming";
   if (d === "TRANSPORTATION_GAS") return "gas";
@@ -36,7 +40,7 @@ export function rewardCategory(t) {
   if (/walmart|target/.test(m)) return "superstore";
   if (p === "FOOD_AND_DRINK" && !/BEER_WINE|VENDING/.test(d)) return "dining";
   if (p === "TRAVEL") return "travel";
-  if (p === "ENTERTAINMENT") return d === "ENTERTAINMENT_TV_AND_MOVIES" ? "streaming" : "entertainment";
+  if (p === "ENTERTAINMENT") return d === "ENTERTAINMENT_TV_AND_MOVIES" ? "streaming" : d === "ENTERTAINMENT_CASINOS_AND_GAMBLING" ? "other" : "entertainment";
   if (p === "RENT_AND_UTILITIES" && d !== "RENT_AND_UTILITIES_RENT") return "utilities";
   if (p === "HOME_IMPROVEMENT") return "home_improvement";
   if (d === "MEDICAL_PHARMACIES_AND_SUPPLEMENTS") return "drugstore";
@@ -44,11 +48,11 @@ export function rewardCategory(t) {
   return "other";
 }
 
-const quarterOf = (iso) => `${iso.slice(0, 4)}-Q${Math.floor((Number(iso.slice(5, 7)) - 1) / 3) + 1}`;
+export const quarterOf = (iso) => `${iso.slice(0, 4)}-Q${Math.floor((Number(iso.slice(5, 7)) - 1) / 3) + 1}`;
 
 // Discover it rotating 5% categories (activation required, $1,500 per quarter)
-const DISCOVER_QUARTERS = {
-  "2026-Q1": ["grocery"],
+export const DISCOVER_QUARTERS = {
+  "2026-Q1": ["grocery", "wholesale", "streaming"],
   "2026-Q2": ["dining", "home_improvement"],
   "2026-Q3": ["gas", "transportation", "drugstore"],
   "2026-Q4": ["dining", "entertainment", "utilities"],
@@ -82,7 +86,7 @@ export const CARD_PROGRAMS = [
     base: 1, rates: {},
     rotating: (iso) => DISCOVER_QUARTERS[quarterOf(iso)] ?? [],
     caps: [{ key: quarterOf, limit: 1500, rotating: true, after: 1, label: "5% categories, per quarter" }],
-    notes: ["5% on rotating categories, up to $1,500 a quarter (activate each quarter)", "Oct to Dec 2026: restaurants, entertainment and utilities", "1% everything else"],
+    notes: ["5% on rotating categories, up to $1,500 a quarter (activate each quarter)", "1% everything else"],
   },
   {
     id: "xbox", match: /xbox/i, name: "Xbox Mastercard", currency: "points",
@@ -155,3 +159,26 @@ export function bestCards(accounts, usage, iso) {
 }
 
 export const bestRateFor = (best, cat) => best[cat]?.rate ?? 0;
+
+export const DISCOVER_QUARTER_LABELS = {
+  "2026-Q1": "Grocery stores, wholesale clubs and streaming",
+  "2026-Q2": "Restaurants and home improvement stores",
+  "2026-Q3": "Gas stations, transportation and drug stores",
+  "2026-Q4": "Restaurants, entertainment and utilities",
+};
+
+// Discover earnings split by quarter: 5% bonus spend against the $1,500 cap, plus 1% on the rest
+export function discoverQuarters(rows, accountIds, year) {
+  const out = ["Q1", "Q2", "Q3", "Q4"].map((q) => ({
+    key: `${year}-${q}`, label: q, categories: DISCOVER_QUARTER_LABELS[`${year}-${q}`] ?? "Not announced yet",
+    bonusSpend: 0, otherSpend: 0, bonusEarned: 0, otherEarned: 0,
+  }));
+  for (const r of rows) {
+    if (!accountIds.includes(r.account.id)) continue;
+    const q = out.find((o) => o.key === quarterOf(r.t.date));
+    if (!q) continue;
+    if ((DISCOVER_QUARTERS[q.key] ?? []).includes(r.cat)) { q.bonusSpend += r.t.amount; q.bonusEarned += r.earned; }
+    else { q.otherSpend += r.t.amount; q.otherEarned += r.earned; }
+  }
+  return out;
+}
