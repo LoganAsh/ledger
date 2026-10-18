@@ -8,6 +8,7 @@ import Activity from "./screens/Activity";
 import Spending from "./screens/Spending";
 import Accounts from "./screens/Accounts";
 import Upcoming from "./screens/Upcoming";
+import Rewards from "./screens/Rewards";
 import Notice from "./components/Notice";
 import { AccountsIcon, ActivityIcon, OverviewIcon, SpendingIcon, UpcomingIcon } from "./components/Icons";
 
@@ -58,12 +59,13 @@ function Ledger({ session }) {
             {tab === "upcoming" && <Upcoming {...props} />}
             {tab === "spending" && <Spending {...props} />}
             {tab === "accounts" && <Accounts {...props} />}
+            {tab === "rewards" && <Rewards {...props} />}
           </>
         )}
       </main>
       <nav className="tabbar" aria-label="Sections">
         {TABS.map(({ id, label, Icon }) => (
-          <button key={id} className={tab === id ? "tab active" : "tab"} aria-current={tab === id ? "page" : undefined} onClick={() => go(id)}>
+          <button key={id} className={tab === id || (tab === "rewards" && id === "accounts") ? "tab active" : "tab"} aria-current={tab === id ? "page" : undefined} onClick={() => go(id)}>
             <Icon />
             <span>{label}</span>
           </button>

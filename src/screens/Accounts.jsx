@@ -3,6 +3,7 @@ import Sheet from "../components/Sheet";
 import Vehicles from "../components/Vehicles";
 import { money, moneyWhole, timeAgo } from "../lib/format";
 import { supabase } from "../lib/supabase";
+import { computeRewards } from "../lib/rewards";
 
 const GROUPS = [
   { type: "depository", title: "Cash" },
@@ -11,7 +12,7 @@ const GROUPS = [
   { type: "investment", title: "Investments" },
 ];
 
-export default function Accounts({ ledger, plaid }) {
+export default function Accounts({ ledger, plaid, go }) {
   const { accounts, items, updateAccount, sync, syncing } = ledger;
   const [editing, setEditing] = useState(null);
   const known = GROUPS.map((g) => g.type);
@@ -57,6 +58,16 @@ export default function Accounts({ ledger, plaid }) {
           </section>
         );
       })}
+
+      {accounts.some((a) => a.type === "credit") && (
+        <section className="block">
+          <button className="block-head" onClick={() => go("rewards")}>
+            <h2>Card rewards</h2>
+            <span className="link">{rewardsYtd(ledger)} this year ›</span>
+          </button>
+          <p className="meta">See which card earns the most for each kind of purchase.</p>
+        </section>
+      )}
 
       <Vehicles ledger={ledger} />
 
@@ -138,4 +149,10 @@ function EditAccount({ account, onClose, onSave }) {
       <button className="btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
     </Sheet>
   );
+}
+
+function rewardsYtd({ transactions, accounts }) {
+  const year = new Date().toLocaleDateString("en-CA").slice(0, 4);
+  const { rows } = computeRewards(transactions, accounts, `${year}-01-01`);
+  return moneyWhole(rows.reduce((s, r) => s + r.earned, 0));
 }
