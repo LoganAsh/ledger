@@ -68,10 +68,11 @@ export function useLedger(session) {
     setState((s) => ({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) }));
   }, []);
 
-  const saveBudget = useCallback(async (category, monthly_limit) => {
+  // monthly_limit holds the budget amount for its period (per month, or per calendar year)
+  const saveBudget = useCallback(async (category, amount, period = "monthly") => {
     const { data, error } = await supabase
       .from("budgets")
-      .upsert({ user_id: session.user.id, category, monthly_limit }, { onConflict: "user_id,category" })
+      .upsert({ user_id: session.user.id, category, monthly_limit: amount, period }, { onConflict: "user_id,category" })
       .select()
       .single();
     if (error) throw error;

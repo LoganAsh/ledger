@@ -26,7 +26,20 @@ export default function Spending({ ledger, go }) {
   const prevCats = useMemo(() => new Map(spendingByCategory(transactions, prev).map((c) => [c.category, c.total])), [transactions, prev]);
   const merchants = useMemo(() => topMerchants(transactions, month), [transactions, month]);
   const recurring = useMemo(() => recurringCharges(transactions), [transactions]);
-  const budgetMap = new Map(budgets.map((b) => [b.category, Number(b.monthly_limit)]));
+  const budgetMap = new Map(budgets.filter((b) => b.period !== "yearly").map((b) => [b.category, Number(b.monthly_limit)]));
+  const yearlyMap = new Map(budgets.filter((b) => b.period === "yearly").map((b) => [b.category, Number(b.monthly_limit)]));
+  // Monthly equivalents, for comparing against averages
+  const avgBudgetMap = new Map([...budgetMap, ...[...yearlyMap].map(([c, v]) => [c, v / 12])]);
+  // Year-to-date spending (through the selected month) for categories on a yearly budget
+  const ytd = useMemo(() => {
+    const out = new Map();
+    if (!yearlyMap.size) return out;
+    const year = month.slice(0, 4);
+    for (let m = `${year}-01`; m <= month; m = shiftMonth(m, 1)) {
+      for (const c of spendingByCategory(transactions, m)) if (yearlyMap.has(c.category)) out.set(c.category, (out.get(c.category) ?? 0) + c.total);
+    }
+    return out;
+  }, [transactions, month, budgets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isCurrent = month === thisMonth;
   const cum = cumulativeByDay(transactions, month);
@@ -53,7 +66,7 @@ export default function Spending({ ledger, go }) {
       </div>
 
       {period !== "month" ? (
-        <AverageView n={period} transactions={transactions} budgetMap={budgetMap} earliest={firstFullMonth} go={go} onEditBudgets={() => setEditingBudgets(true)} hasBudgets={budgets.length > 0} />
+        <AverageView n={period} transactions={transactions} budgetMap={avgBudgetMap} yearlyMap={yearlyMap} earliest={firstFullMonth} go={go} onEditBudgets={() => setEditingBudgets(true)} hasBudgets={budgets.length > 0} />
       ) : (
       <>
       <div className="month-nav">
@@ -110,6 +123,19 @@ export default function Spending({ ledger, go }) {
                   </div>
                   {before != null && !isCurrent && <span className="cat-sub">{moneyWhole(before)} the month before</span>}
                   {limit != null && isCurrent && <span className={`cat-sub ${over ? "neg" : ""}`}>{over ? `${money(total - limit)} over budget` : `${money(limit - total)} left`}</span>}
+                  {yearlyMap.has(category) && (() => {
+                    const yl = yearlyMap.get(category);
+                    const spent = ytd.get(category) ?? 0;
+                    const yOver = spent > yl;
+                    return (
+                      <span className="year-budget">
+                        <span className="meter thin"><span className={yOver ? "over" : ""} style={{ width: `${Math.min(spent / yl, 1) * 100}%` }} /></span>
+                        <span className={`cat-sub ${yOver ? "neg" : ""}`}>
+                          {money(spent)} of {moneyWhole(yl)} yearly budget{isCurrent ? (yOver ? ` · ${money(spent - yl)} over` : ` · ${money(yl - spent)} left for ${month.slice(0, 4)}`) : ` by end of ${monthLabel(month).split(" ")[0]}`}
+                        </span>
+                      </span>
+                    );
+                  })()}
                 </button>
               </li>
             );
@@ -160,7 +186,7 @@ export default function Spending({ ledger, go }) {
 }
 
 // Monthly averages over the last n complete months (the current month is left out)
-function AverageView({ n, transactions, budgetMap, earliest, go, onEditBudgets, hasBudgets }) {
+function AverageView({ n, transactions, budgetMap, yearlyMap, earliest, go, onEditBudgets, hasBudgets }) {
   const thisMonth = currentMonthKey();
   const months = useMemo(() => {
     const all = Array.from({ length: n }, (_, i) => shiftMonth(thisMonth, -(i + 1))).reverse();
@@ -232,7 +258,7 @@ function AverageView({ n, transactions, budgetMap, earliest, go, onEditBudgets, 
                 <button className="cat" onClick={() => go("activity", { category })}>
                   <div className="cat-top">
                     <span>{categoryName(category)}</span>
-                    <span>{money(avg)}{limit != null && <span className="of"> vs {moneyWhole(limit)} budget</span>}</span>
+                    <span>{money(avg)}{limit != null && <span className="of"> vs {moneyWhole(limit)}{yearlyMap.has(category) ? `/mo (${moneyWhole(yearlyMap.get(category))}/yr)` : " budget"}</span>}</span>
                   </div>
                   <div className="bar">
                     <span className={limit != null && avg > limit ? "over" : ""} style={{ width: `${(avg / catMax) * 100}%` }} />
@@ -267,6 +293,8 @@ function AverageView({ n, transactions, budgetMap, earliest, go, onEditBudgets, 
 
 function BudgetSheet({ budgets, onClose, saveBudget, deleteBudget, transactions }) {
   const [values, setValues] = useState(() => Object.fromEntries(budgets.map((b) => [b.category, String(b.monthly_limit)])));
+  const [periods, setPeriods] = useState(() => Object.fromEntries(budgets.map((b) => [b.category, b.period ?? "monthly"])));
+  const periodOf = (cat) => periods[cat] ?? "monthly";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -290,7 +318,7 @@ function BudgetSheet({ budgets, onClose, saveBudget, deleteBudget, transactions 
         else if (raw) {
           const n = Number(raw.replace(/[$,]/g, ""));
           if (!Number.isFinite(n) || n < 0) throw new Error(`Enter a valid amount for ${categoryName(cat)}.`);
-          if (!existing || Number(existing.monthly_limit) !== n) await saveBudget(cat, n);
+          if (!existing || Number(existing.monthly_limit) !== n || (existing.period ?? "monthly") !== periodOf(cat)) await saveBudget(cat, n, periodOf(cat));
         }
       }
       onClose();
@@ -302,16 +330,30 @@ function BudgetSheet({ budgets, onClose, saveBudget, deleteBudget, transactions 
 
   return (
     <Sheet title="Monthly budgets" onClose={onClose}>
-      <p className="meta">Leave a category blank to skip it. The hint under each is your average from the last three months.</p>
+      <p className="meta">Leave a category blank to skip it. Switch to /yr for spending that’s lumpy, like travel or car repairs: it’s tracked against a budget for the whole calendar year. Hints come from your last three months.</p>
       <ul className="budget-list">
-        {BUDGETABLE.map((cat) => (
-          <li key={cat}>
-            <label>
-              <span>{categoryName(cat)}{averages[cat] ? <span className="tx-sub"> avg {moneyWhole(averages[cat])}</span> : null}</span>
-              <input inputMode="decimal" placeholder="—" value={values[cat] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [cat]: e.target.value }))} />
-            </label>
-          </li>
-        ))}
+        {BUDGETABLE.map((cat) => {
+          const yearly = periodOf(cat) === "yearly";
+          const hint = averages[cat] ? (yearly ? `about ${moneyWhole(averages[cat] * 12)}/yr` : `avg ${moneyWhole(averages[cat])}/mo`) : null;
+          return (
+            <li key={cat} className="budget-row">
+              <span className="budget-name">{categoryName(cat)}{hint ? <span className="tx-sub"> {hint}</span> : null}</span>
+              <div className="budget-controls">
+                <input
+                  inputMode="decimal"
+                  placeholder="—"
+                  aria-label={`${categoryName(cat)} budget`}
+                  value={values[cat] ?? ""}
+                  onChange={(e) => setValues((v) => ({ ...v, [cat]: e.target.value }))}
+                />
+                <div className="mini-seg" role="radiogroup" aria-label={`${categoryName(cat)} budget period`}>
+                  <button type="button" role="radio" aria-checked={!yearly} className={!yearly ? "on" : ""} onClick={() => setPeriods((p) => ({ ...p, [cat]: "monthly" }))}>/mo</button>
+                  <button type="button" role="radio" aria-checked={yearly} className={yearly ? "on" : ""} onClick={() => setPeriods((p) => ({ ...p, [cat]: "yearly" }))}>/yr</button>
+                </div>
+              </div>
+            </li>
+          );
+        })}
       </ul>
       {error && <p className="form-error" role="alert">{error}</p>}
       <button className="btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save budgets"}</button>

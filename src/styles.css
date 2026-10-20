@@ -371,3 +371,14 @@ a.chip { text-decoration: none; color: var(--green); }
 .best-unit { font-size: 0.7rem; font-weight: 600; color: var(--muted); margin-top: 3px; }
 
 .block-sub { display: block; }
+
+.budget-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; }
+.budget-name { font-weight: 600; min-width: 0; }
+.budget-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.budget-controls input { width: 92px; text-align: right; padding: 8px 10px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); font-size: 16px; }
+.mini-seg { display: flex; background: var(--surface); border: 1px solid var(--rule); border-radius: 99px; padding: 2px; }
+.mini-seg button { background: none; border: 0; border-radius: 99px; padding: 5px 8px; font-size: 0.75rem; font-weight: 700; color: var(--muted); }
+.mini-seg button.on { background: var(--green); color: var(--paper); }
+.year-budget { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.meter.thin { height: 5px; display: block; }
+.meter span.over { background: var(--red); }
