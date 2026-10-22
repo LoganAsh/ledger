@@ -36,6 +36,20 @@ export default function Upcoming({ ledger, plaid, go }) {
   const transfers30 = next30.filter((e) => e.direction === "transfer").reduce((s, e) => s + e.amount, 0);
   const cash = accounts.filter((a) => isCashAccount(a) && !a.is_hidden).reduce((s, a) => s + Number(a.available_balance ?? a.current_balance ?? 0), 0);
   const projected = cash + income30 - due30 - transfers30;
+
+  // Summary for a tapped date: projected for today onward, recorded balance for past days
+  const target = selected && selected >= today ? selected : null;
+  const upTo = target ? schedule.filter((e) => e.date >= today && e.date <= target && !e.paid) : [];
+  const sum = (dir) => upTo.filter((e) => e.direction === dir).reduce((s, e) => s + e.amount, 0);
+  const tIncome = sum("in"), tDue = sum("out"), tXfer = sum("transfer");
+  const tBalance = cash + tIncome - tDue - tXfer;
+  const pastBalance = useMemo(() => {
+    if (!selected || selected >= today) return null;
+    const cashIds = new Set(accounts.filter((a) => isCashAccount(a) && !a.is_hidden).map((a) => a.id));
+    const snaps = ledger.snapshots.filter((x) => x.snapshot_date === selected && cashIds.has(x.account_id));
+    return snaps.length ? snaps.reduce((s, x) => s + Number(x.current_balance ?? 0), 0) : undefined;
+  }, [selected, today, accounts, ledger.snapshots]);
+  const longDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const consentItems = items.filter((i) => i.liabilities_status === "consent_required");
 
   // Calendar grid
@@ -54,18 +68,53 @@ export default function Upcoming({ ledger, plaid, go }) {
         <button className="btn-primary sm" onClick={() => setOpen({ type: "new" })}>Add</button>
       </header>
 
-      <section className="cover">
-        <div>
-          <p className="strip-label">Due in the next 30 days</p>
-          <p className="figure-lg">{money(due30)}</p>
-        </div>
-        <dl className="cover-rows">
-          <div><dt>Cash in checking</dt><dd>{money(cash)}</dd></div>
-          <div><dt>Expected income</dt><dd className="pos">+{money(income30)}</dd></div>
-          <div><dt>Payments due</dt><dd className="neg">−{money(due30)}</dd></div>
-          {transfers30 > 0 && <div><dt>Transfers to savings</dt><dd className="xfer">−{money(transfers30)}</dd></div>}
-          <div className="cover-total"><dt>Checking in 30 days</dt><dd className={projected < 0 ? "neg" : ""}>{money(projected)}</dd></div>
-        </dl>
+      <section className={`cover ${selected ? "cover-date" : ""}`}>
+        {target ? (
+          <>
+            <div className="cover-top">
+              <p className="strip-label">Checking on {longDate(target)}</p>
+              <button className="btn-text" onClick={() => setSelected(null)}>Next 30 days</button>
+            </div>
+            <p className={`figure-lg ${tBalance < 0 ? "neg" : ""}`}>{money(tBalance)}</p>
+            <dl className="cover-rows">
+              <div><dt>Cash in checking today</dt><dd>{money(cash)}</dd></div>
+              <div><dt>Expected income</dt><dd className="pos">+{money(tIncome)}</dd></div>
+              <div><dt>Payments due</dt><dd className="neg">−{money(tDue)}</dd></div>
+              {tXfer > 0 && <div><dt>Transfers to savings</dt><dd className="xfer">−{money(tXfer)}</dd></div>}
+            </dl>
+            <p className="meta">Projected from today through the end of {target === today ? "today" : longDate(target)}.</p>
+          </>
+        ) : selected ? (
+          <>
+            <div className="cover-top">
+              <p className="strip-label">Checking on {longDate(selected)}</p>
+              <button className="btn-text" onClick={() => setSelected(null)}>Next 30 days</button>
+            </div>
+            {pastBalance != null ? (
+              <>
+                <p className="figure-lg">{money(pastBalance)}</p>
+                <p className="meta">Actual balance recorded that day.</p>
+              </>
+            ) : (
+              <p className="meta">No balance was recorded for this day. Daily balances start from when your accounts were linked.</p>
+            )}
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="strip-label">Due in the next 30 days</p>
+              <p className="figure-lg">{money(due30)}</p>
+            </div>
+            <dl className="cover-rows">
+              <div><dt>Cash in checking</dt><dd>{money(cash)}</dd></div>
+              <div><dt>Expected income</dt><dd className="pos">+{money(income30)}</dd></div>
+              <div><dt>Payments due</dt><dd className="neg">−{money(due30)}</dd></div>
+              {transfers30 > 0 && <div><dt>Transfers to savings</dt><dd className="xfer">−{money(transfers30)}</dd></div>}
+              <div className="cover-total"><dt>Checking in 30 days</dt><dd className={projected < 0 ? "neg" : ""}>{money(projected)}</dd></div>
+            </dl>
+            <p className="meta">Tap any date to see where checking should be that day.</p>
+          </>
+        )}
       </section>
 
       {consentItems.map((i) => (

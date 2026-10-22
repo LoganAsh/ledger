@@ -31,8 +31,12 @@ export default function Overview({ ledger, plaid, go }) {
   const pace = now.spent - lastAtSameDay;
   const recent = transactions.slice(0, 6);
   const t0 = todayIso();
-  const soon = buildSchedule(ledger, t0, addDays(t0, 7)).filter((e) => !e.paid && e.direction === "out");
-  const soonTotal = soon.reduce((s, e) => s + e.amount, 0);
+  // This week runs Monday through Sunday
+  const weekStart = addDays(t0, -((new Date().getDay() + 6) % 7));
+  const weekEnd = addDays(weekStart, 6);
+  const soon = buildSchedule(ledger, weekStart, weekEnd).filter((e) => !e.paid && e.direction === "out");
+  const soonTotal = soon.filter((e) => e.date >= t0).reduce((s, e) => s + e.amount, 0);
+  const shortDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   return (
     <>
@@ -75,17 +79,18 @@ export default function Overview({ ledger, plaid, go }) {
         <section className="block">
           <button className="block-head" onClick={() => go("upcoming")}>
             <h2>Due this week</h2>
-            <span className="link">{moneyWhole(soonTotal)}</span>
+            <span className="link">{moneyWhole(soonTotal)} left</span>
           </button>
+          <p className="meta week-range">{shortDate(weekStart)} to {shortDate(weekEnd)}</p>
           <ul className="plain-list">
-            {soon.slice(0, 4).map((e) => (
-              <li key={e.key}>
+            {soon.slice(0, 6).map((e) => (
+              <li key={e.key} className={e.date < t0 ? "earlier" : ""}>
                 <span>{e.name}<span className="tx-sub"> {dateLabel(e.date)}{e.estimated ? ", estimated" : ""}</span></span>
                 <span className={`num ${e.overdue ? "neg" : ""}`}>{money(e.amount)}</span>
               </li>
             ))}
           </ul>
-          {soon.length > 4 && <p className="meta">{soon.length - 4} more this week.</p>}
+          {soon.length > 6 && <p className="meta">{soon.length - 6} more this week.</p>}
         </section>
       )}
 

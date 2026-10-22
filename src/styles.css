@@ -382,3 +382,10 @@ a.chip { text-decoration: none; color: var(--green); }
 .year-budget { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .meter.thin { height: 5px; display: block; }
 .meter span.over { background: var(--red); }
+
+.cover-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.cover-top .btn-text { padding: 0; font-size: 0.85rem; }
+.cover-date { border-color: var(--today-ink); }
+.cover .meta:last-child { margin-top: 10px; }
+.week-range { margin: -6px 0 6px; }
+.plain-list li.earlier { opacity: 0.5; }
