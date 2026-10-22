@@ -389,3 +389,5 @@ a.chip { text-decoration: none; color: var(--green); }
 .cover .meta:last-child { margin-top: 10px; }
 .week-range { margin: -6px 0 6px; }
 .plain-list li.earlier { opacity: 0.5; }
+
+.week-stats { margin: 4px 0 8px; }

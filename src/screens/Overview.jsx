@@ -34,8 +34,11 @@ export default function Overview({ ledger, plaid, go }) {
   // This week runs Monday through Sunday
   const weekStart = addDays(t0, -((new Date().getDay() + 6) % 7));
   const weekEnd = addDays(weekStart, 6);
-  const soon = buildSchedule(ledger, weekStart, weekEnd).filter((e) => !e.paid && e.direction === "out");
+  const week = buildSchedule(ledger, weekStart, weekEnd).filter((e) => !e.paid);
+  const soon = week.filter((e) => e.direction === "out");
   const soonTotal = soon.filter((e) => e.date >= t0).reduce((s, e) => s + e.amount, 0);
+  const weekIncome = week.filter((e) => e.direction === "in");
+  const incomeLeft = weekIncome.filter((e) => e.date >= t0).reduce((s, e) => s + e.amount, 0);
   const shortDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   return (
@@ -75,22 +78,27 @@ export default function Overview({ ledger, plaid, go }) {
         )}
       </section>
 
-      {soon.length > 0 && (
+      {(soon.length > 0 || weekIncome.length > 0) && (
         <section className="block">
           <button className="block-head" onClick={() => go("upcoming")}>
-            <h2>Due this week</h2>
-            <span className="link">{moneyWhole(soonTotal)} left</span>
+            <h2>This week</h2>
+            <span className="link">Calendar</span>
           </button>
           <p className="meta week-range">{shortDate(weekStart)} to {shortDate(weekEnd)}</p>
+          <dl className="stat-row week-stats">
+            <div><dt>Income expected</dt><dd className="pos">+{moneyWhole(incomeLeft)}</dd></div>
+            <div><dt>Payments due</dt><dd className="neg">−{moneyWhole(soonTotal)}</dd></div>
+          </dl>
           <ul className="plain-list">
-            {soon.slice(0, 6).map((e) => (
+            {[...weekIncome, ...soon].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8).map((e) => (
               <li key={e.key} className={e.date < t0 ? "earlier" : ""}>
                 <span>{e.name}<span className="tx-sub"> {dateLabel(e.date)}{e.estimated ? ", estimated" : ""}</span></span>
-                <span className={`num ${e.overdue ? "neg" : ""}`}>{money(e.amount)}</span>
+                <span className={`num ${e.direction === "in" ? "pos" : e.overdue ? "neg" : ""}`}>{e.direction === "in" ? "+" : ""}{money(e.amount)}</span>
               </li>
             ))}
           </ul>
-          {soon.length > 6 && <p className="meta">{soon.length - 6} more this week.</p>}
+          {weekIncome.length + soon.length > 8 && <p className="meta">{weekIncome.length + soon.length - 8} more this week.</p>}
+          <p className="meta">Totals count today through Sunday.</p>
         </section>
       )}
 
