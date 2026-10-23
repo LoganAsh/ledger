@@ -41,7 +41,7 @@ export default function Accounts({ ledger, plaid, go }) {
                     <div className="tx-main">
                       <span className="tx-name">{a.nickname || a.name}</span>
                       <span className="tx-sub">
-                        {items.find((i) => i.id === a.item_id)?.institution_name ?? ""}{a.mask ? ` ••${a.mask}` : ""}{a.is_hidden ? " · Hidden" : ""}
+                        {items.find((i) => i.id === a.item_id)?.institution_name ?? ""}{a.mask ? ` ••${a.mask}` : ""}{a.treat_as === "savings" && a.type === "depository" ? " · Counted as savings" : a.treat_as === "cash" && a.subtype !== "checking" ? " · Counted as cash" : ""}{a.is_hidden ? " · Hidden" : ""}
                       </span>
                     </div>
                     <div className="acct-right">
@@ -109,13 +109,19 @@ export default function Accounts({ ledger, plaid, go }) {
 function EditAccount({ account, onClose, onSave }) {
   const [nickname, setNickname] = useState(account.nickname ?? "");
   const [hidden, setHidden] = useState(account.is_hidden);
+  const isBank = account.type === "depository";
+  const bankDefault = ["checking", "paypal", "prepaid", "cash management", "ebt"].includes(account.subtype ?? "checking") ? "cash" : "savings";
+  const [treatAs, setTreatAs] = useState(account.treat_as ?? bankDefault);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   async function save() {
     setSaving(true);
     try {
-      await onSave({ nickname: nickname.trim() || null, is_hidden: hidden });
+      await onSave({
+        nickname: nickname.trim() || null, is_hidden: hidden,
+        ...(isBank ? { treat_as: treatAs === bankDefault ? null : treatAs } : {}),
+      });
     } catch (e) {
       setError(e.message);
       setSaving(false);
@@ -135,6 +141,16 @@ function EditAccount({ account, onClose, onSave }) {
         Nickname
         <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder={account.name} />
       </label>
+      {isBank && (
+        <div className="field">
+          <span>Count this account as</span>
+          <div className="seg" role="radiogroup" aria-label="Count this account as">
+            <button type="button" role="radio" aria-checked={treatAs === "cash"} className={treatAs === "cash" ? "on plain" : ""} onClick={() => setTreatAs("cash")}>Cash</button>
+            <button type="button" role="radio" aria-checked={treatAs === "savings"} className={treatAs === "savings" ? "on plain" : ""} onClick={() => setTreatAs("savings")}>Savings</button>
+          </div>
+          <span className="meta">Cash counts toward checking on the calendar. Savings counts toward savings & investments.</span>
+        </div>
+      )}
       <label className="toggle">
         <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
         <span>Hide from net worth and totals</span>

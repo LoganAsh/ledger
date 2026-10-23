@@ -17,7 +17,8 @@ export const isIncome = (t) => !t.is_excluded && t.amount < 0 && txCategory(t) =
 
 // Everyday spending accounts; other depository subtypes (savings, money market, CD, HSA) count as savings
 const CASH_SUBTYPES = ["checking", "paypal", "prepaid", "cash management", "ebt"];
-export const isCashAccount = (a) => a.type === "depository" && CASH_SUBTYPES.includes(a.subtype ?? "checking");
+export const isCashAccount = (a) =>
+  a.treat_as ? a.treat_as === "cash" : a.type === "depository" && CASH_SUBTYPES.includes(a.subtype ?? "checking");
 
 // Vehicles and other property the user values by hand
 export const realAssetTotal = (realAssets = []) => realAssets.filter((a) => !a.is_hidden).reduce((s, a) => s + Number(a.value ?? 0), 0);
@@ -32,7 +33,7 @@ export function balanceSummary(accounts, realAssets = []) {
       if (a.type === "credit" && a.credit_limit) { creditUsed += bal; creditLimit += Number(a.credit_limit); }
     } else {
       assets += bal;
-      if (a.type === "depository" && CASH_SUBTYPES.includes(a.subtype ?? "checking")) cash += bal;
+      if (isCashAccount(a)) cash += bal;
       else savings += bal;
     }
   }
